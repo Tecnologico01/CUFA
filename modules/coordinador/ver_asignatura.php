@@ -14,10 +14,9 @@ if(!$id){
 $stmt = $pdo->prepare("
 SELECT 
     m.*, 
-    c.nombre as carrera,
+    COALESCE(m.carrera_nombre, 'Sin carrera') as carrera,
     sm.nombre as seriacion_nombre
 FROM materias m
-JOIN carreras c ON c.id = m.carrera_id
 LEFT JOIN materias sm ON sm.id = m.seriacion_id
 WHERE m.id = ?
 ");
@@ -76,6 +75,8 @@ $subas = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Grado</label>
                     <p class="text-sm font-black text-purple-600 uppercase italic"> <?= $materia['grado'] ?></p>
                 </div>
+
+                
             </div>
 
             <div class="grid grid-cols-2 md:grid-cols-4 gap-6 p-8 bg-slate-50 rounded-[2rem] border border-slate-100 mb-12">
@@ -130,6 +131,14 @@ $subas = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             </span>
                         </div>
                     </div>
+
+                </div>
+
+                <div class="text-center border-l border-slate-200">
+                    <label class="text-[9px] font-black text-slate-400 uppercase block mb-1">Unidades</label>
+                    <span class="text-2xl font-black text-indigo-600 italic leading-none">
+                        <?= $materia['total_unidades'] ?: '0' ?>
+                    </span>
                 </div>
             </div>
 

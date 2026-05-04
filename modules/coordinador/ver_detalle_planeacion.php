@@ -17,7 +17,12 @@ function aRomano($num) {
 
 /* INFO GENERAL */
 $stmtInfo = $pdo->prepare("
-    SELECT u.nombres AS docente, m.nombre AS materia, g.nombre AS grupo, ad.estado_planeacion
+    SELECT 
+        u.nombres AS docente, 
+        m.nombre AS materia, 
+        g.nombre AS grupo, 
+        ad.estado_planeacion,
+        m.total_unidades
     FROM asignaciones_docentes ad
     JOIN docentes d ON ad.docente_id = d.id
     JOIN usuarios u ON d.usuario_id = u.id
@@ -28,18 +33,18 @@ $stmtInfo = $pdo->prepare("
 $stmtInfo->execute([$asignacion_id]);
 $info = $stmtInfo->fetch(PDO::FETCH_ASSOC);
 
-/* PARCIALES/GRADOS */
-$stmtParciales = $pdo->prepare("
-    SELECT DISTINCT parcial, objetivo_unidad, nombre_unidad 
-    FROM temas_materia 
-    WHERE asignacion_id=? 
-    ORDER BY parcial ASC
-");
-$stmtParciales->execute([$asignacion_id]);
-$lista_parciales = $stmtParciales->fetchAll(PDO::FETCH_ASSOC);
+$total_unidades = (int)($info['total_unidades'] ?? 0);
 
-if (!empty($lista_parciales) && !$parcial_seleccionado) {
-    $parcial_seleccionado = $lista_parciales[0]['parcial'];
+$lista_unidades = [];
+
+for ($i = 1; $i <= $total_unidades; $i++) {
+    $lista_unidades[] = [
+        'unidad' => $i
+    ];
+}
+
+if (!$parcial_seleccionado && $total_unidades > 0) {
+    $parcial_seleccionado = 1;
 }
 
 /* TEMAS + ACTIVIDADES */
@@ -101,20 +106,26 @@ if ($examen_id) {
     </div>
 
     <div class="mb-10 flex flex-wrap gap-2">
-        <?php foreach ($lista_parciales as $p): ?>
-            <a href="?modulo=<?= $modulo_actual ?>&asignacion_id=<?= $asignacion_id ?>&parcial=<?= $p['parcial'] ?>"
-               class="px-8 py-4 rounded-[1.5rem] font-black uppercase italic text-[11px] tracking-widest transition-all
-               <?= $p['parcial']==$parcial_seleccionado 
-                   ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-200 -translate-y-1' 
-                   : 'bg-white text-slate-400 border border-slate-100 hover:bg-slate-50' ?>">
-                Unidad <?= aRomano($p['parcial']) ?>
+        <?php foreach ($lista_unidades as $u): ?>
+            <a href="?modulo=<?= $modulo_actual ?>&asignacion_id=<?= $asignacion_id ?>&parcial=<?= $u['unidad'] ?>"
+            class="px-8 py-4 rounded-[1.5rem] font-black uppercase italic text-[11px]
+            <?= $u['unidad']==$parcial_seleccionado 
+                ? 'bg-indigo-600 text-white' 
+                : 'bg-white text-slate-400' ?>">
+                Unidad <?= aRomano($u['unidad']) ?>
             </a>
         <?php endforeach; ?>
     </div>
 
     <?php 
-    $unidad_info = array_filter($lista_parciales, fn($x)=>$x['parcial']==$parcial_seleccionado);
-    $unidad_info = array_values($unidad_info)[0] ?? null;
+        $stmtUnidad = $pdo->prepare("
+        SELECT nombre_unidad, objetivo_unidad
+        FROM temas_materia
+        WHERE asignacion_id=? AND parcial=?
+        LIMIT 1
+    ");
+    $stmtUnidad->execute([$asignacion_id, $parcial_seleccionado]);
+    $unidad_info = $stmtUnidad->fetch(PDO::FETCH_ASSOC);
     ?>
     <div class="bg-white p-12 rounded-[4rem] shadow-sm border border-slate-100 mb-12 relative overflow-hidden">
         <div class="absolute -top-6 -right-6 p-10 opacity-[0.03] pointer-events-none">
