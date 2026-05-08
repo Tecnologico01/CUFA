@@ -4,17 +4,16 @@ require_once __DIR__ . '/../../includes/db.php';
 /* Consulta optimizada */
 $materias = $pdo->query("
 SELECT 
-    id, 
-    clave, 
-    nombre, 
-    nombre_corto, 
-    COALESCE(carrera_nombre, 'Sin carrera') as carrera, 
-    tipo
-FROM materias
-ORDER BY nombre ASC
+    m.id, 
+    m.clave, 
+    m.nombre, 
+    m.nombre_corto, 
+    COALESCE(c.nombre, 'Sin carrera') AS carrera, 
+    m.tipo
+FROM materias m
+LEFT JOIN carreras c ON m.carrera_id = c.id
+ORDER BY m.nombre ASC
 ")->fetchAll(PDO::FETCH_ASSOC);
-
-$total_materias = count($materias);
 ?>
 
 <div class="max-w-7xl mx-auto p-6 bg-slate-50 min-h-screen animate-fade-in">

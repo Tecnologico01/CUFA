@@ -3,10 +3,10 @@ require_once __DIR__ . '/../../includes/db.php';
 
 header('Content-Type: application/json');
 
-$carrera_nombre = $_GET['carrera_nombre'] ?? null;
+$carrera_id = $_GET['carrera_id'] ?? null;
 $periodo_id = $_GET['periodo_id'] ?? null;
 
-if(!$carrera_nombre || !$periodo_id){
+if(!$carrera_id || !$periodo_id){
     echo json_encode([]);
     exit;
 }
@@ -16,13 +16,12 @@ try{
     $stmt = $pdo->prepare("
         SELECT id, nombre
         FROM grupos
-        WHERE 
-            LOWER(TRIM(carrera_nombre)) = LOWER(TRIM(?))
+        WHERE carrera_id = ?
         AND periodo_id = ?
         ORDER BY nombre
     ");
 
-    $stmt->execute([$carrera_nombre, $periodo_id]);
+    $stmt->execute([$carrera_id, $periodo_id]);
 
     $grupos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

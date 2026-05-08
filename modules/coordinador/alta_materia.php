@@ -2,29 +2,13 @@
 require_once __DIR__ . '/../../includes/db.php';
 
 /* =========================
-   CARRERAS DESDE API
+   CARRERAS
 ========================= */
-$apiUrl = "https://sistema.cufa.edu.mx/api/carreras";
-$apiKey = "H6z0U6FpnMPsgfCAe7ijkiXiL22YEE+ybjRtiZtDKmQ=";
-
-$ch = curl_init();
-curl_setopt_array($ch, [
-    CURLOPT_URL => $apiUrl,
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_HTTPHEADER => ["X-API-Key: $apiKey"],
-]);
-
-$response = curl_exec($ch);
-if (curl_errno($ch)) { die("Error en la conexión: " . curl_error($ch)); }
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
-
-if ($httpCode !== 200) { die("Error HTTP: $httpCode"); }
-
-$data = json_decode($response, true);
-$carreras = $data['data'] ?? [];
-$mapCarreras = [];
-foreach ($carreras as $c) { $mapCarreras[$c['id']] = $c['nombre']; }
+$carreras = $pdo->query("
+    SELECT id, nombre 
+    FROM carreras 
+    ORDER BY nombre ASC
+")->fetchAll();
 
 /* =========================
    DATOS COMPLEMENTARIOS
@@ -33,8 +17,15 @@ $todas_materias = $pdo->query("SELECT id, nombre, clave FROM materias ORDER BY n
 
 /* SOLO ÚLTIMAS 5 PARA EL FONDO */
 $materias = $pdo->query("
-SELECT m.id, m.clave, m.nombre, m.nombre_corto, m.carrera_nombre as carrera, m.tipo
+SELECT 
+    m.id, 
+    m.clave, 
+    m.nombre, 
+    m.nombre_corto, 
+    c.nombre AS carrera, 
+    m.tipo
 FROM materias m
+JOIN carreras c ON m.carrera_id = c.id
 ORDER BY m.id DESC
 LIMIT 5
 ")->fetchAll();
@@ -52,17 +43,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $stmt = $pdo->prepare("
             INSERT INTO materias (
-                carrera_id, carrera_nombre, grado, clave, nombre, nombre_corto, aula, creditos, tipo,
-                seriacion_id, es_opcional, maneja_niveles, area_formacion,
-                horas_docente, horas_independientes, total_unidades
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            carrera_id, grado, clave, nombre, nombre_corto, aula, creditos, tipo,
+            seriacion_id, es_opcional, maneja_niveles, area_formacion,
+            horas_docente, horas_independientes, total_unidades
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ");
 
         $total_unidades = (!empty($_POST['total_unidades'])) ? (int)$_POST['total_unidades'] : 0;
-        $carrera_nombre = $mapCarreras[$_POST['carrera_id']] ?? 'Desconocida';
 
         $stmt->execute([
-            $_POST['carrera_id'], $carrera_nombre, $_POST['grado'], $_POST['clave'],
+            $_POST['carrera_id'], $_POST['grado'], $_POST['clave'],
             $_POST['nombre'], $_POST['nombre_corto'], $_POST['aula'], $_POST['creditos'],
             $_POST['tipo_modalidad'], $_POST['seriacion_id'] ?: null, $_POST['es_opcional'],
             $_POST['maneja_niveles'], $_POST['area_formacion'], $_POST['horas_docente'],
@@ -173,12 +163,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Licenciatura</label>
                                 <select name="carrera_id" id="carreraSelect" class="w-full p-4 bg-white border-2 border-slate-200 rounded-2xl font-bold outline-none focus:border-purple-500 appearance-none shadow-sm">
                                     <?php foreach($carreras as $c): ?>
-                                        <option value="<?= $c['id'] ?>" data-nombre="<?= $c['nombre'] ?>">
+                                        <option value="<?= $c['id'] ?>">
                                             <?= $c['nombre'] ?>
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <input type="hidden" name="carrera_nombre" id="carreraNombre">
                             </div>
                             <div>
                                 <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Grado</label>
@@ -335,17 +324,6 @@ function toggleSubSelector(valor){
         document.getElementById("listaSubas").innerHTML = "";
     }
 }
-
-document.addEventListener("DOMContentLoaded", () => {
-    const select = document.getElementById("carreraSelect");
-    const hidden = document.getElementById("carreraNombre");
-    function actualizarNombre(){
-        const selected = select.options[select.selectedIndex];
-        hidden.value = selected.getAttribute("data-nombre");
-    }
-    actualizarNombre();
-    select.addEventListener("change", actualizarNombre);
-});
 
 function cargarSubasignaturas(){
     fetch("/sistema_academico/modules/coordinador/get_subasignaturas.php")

@@ -2,33 +2,14 @@
 require_once __DIR__ . '/../../includes/db.php';
 
 /* =========================
-   OBTENER CARRERAS (API)
+   OBTENER CARRERAS
 ========================= */
-$apiUrl = "https://sistema.cufa.edu.mx/api/carreras";
-$apiKey = "H6z0U6FpnMPsgfCAe7ijkiXiL22YEE+ybjRtiZtDKmQ=";
-
-$ch = curl_init();
-curl_setopt_array($ch, [
-    CURLOPT_URL => $apiUrl,
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_HTTPHEADER => ["X-API-Key: $apiKey"],
-]);
-
-$response = curl_exec($ch);
-
-if (curl_errno($ch)) {
-    die("Error en la conexión: " . curl_error($ch));
-}
-
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
-
-if ($httpCode !== 200) {
-    die("Error HTTP: $httpCode");
-}
-
-$data = json_decode($response, true);
-$carreras = $data['data'] ?? [];
+$stmt = $pdo->query("
+    SELECT id, nombre
+    FROM carreras
+    ORDER BY nombre ASC
+");
+$carreras = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 /* =========================
    OBTENER PERIODOS ACTIVOS
@@ -48,9 +29,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $nombre = trim($_POST['nombre'] ?? '');
     $periodo_id = $_POST['periodo_id'] ?? '';
-    $carrera_nombre = $_POST['carrera_nombre'] ?? '';
+    $carrera_id = $_POST['carrera_id'] ?? '';
 
-    if (!$nombre || !$periodo_id || !$carrera_nombre) {
+    if (!$nombre || !$periodo_id || !$carrera_id) {
         $error = "Todos los campos son obligatorios";
     } else {
 
@@ -66,11 +47,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
 
             $stmt = $pdo->prepare("
-                INSERT INTO grupos (nombre, periodo_id, carrera_nombre)
+                INSERT INTO grupos (nombre, periodo_id, carrera_id)
                 VALUES (?, ?, ?)
             ");
 
-            if ($stmt->execute([$nombre, $periodo_id, $carrera_nombre])) {
+            if ($stmt->execute([$nombre, $periodo_id, $carrera_id])) {
                 $success = "Grupo creado correctamente";
             } else {
                 $error = "Error al crear el grupo";
@@ -86,20 +67,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="mb-10 flex justify-between items-end">
         <div>
             <div class="flex items-center gap-2 mb-2">
-                <span class="bg-purple-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter">Control Escolar</span>
+                <span class="bg-purple-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter">Coordinación</span>
                 <span class="text-slate-300 text-[10px] font-bold">/</span>
-                <span class="text-slate-500 text-[10px] font-black uppercase tracking-widest">Infraestructura</span>
+                <span class="text-slate-500 text-[10px] font-black uppercase tracking-widest">Gestión de Grupos</span>
             </div>
             <h1 class="text-4xl font-black text-slate-900 tracking-tighter uppercase leading-none">
                 Apertura de <span class="text-purple-600 italic">Grupos</span>
             </h1>
-        </div>
-        <div class="text-right">
-            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Estado de Red</span>
-            <div class="flex items-center justify-end gap-2">
-                <span class="text-[10px] font-bold text-emerald-500 italic">API Conectada</span>
-                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            </div>
         </div>
     </div>
 
@@ -146,11 +120,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <!-- Carrera -->
                     <div class="group/field">
                         <label class="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-[0.2em] mb-2 block">Carrera (Sincronizada)</label>
-                        <select name="carrera_nombre" required 
+                        <select name="carrera_id" required 
                             class="w-full p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl text-sm font-bold text-slate-700 focus:bg-white focus:border-purple-600 focus:outline-none transition-all cursor-pointer appearance-none">
                             <option value="">Seleccionar...</option>
                             <?php foreach ($carreras as $c): ?>
-                                <option value="<?= $c['nombre'] ?>">
+                                <option value="<?= $c['id'] ?>">
                                     <?= $c['nombre'] ?>
                                 </option>
                             <?php endforeach; ?>

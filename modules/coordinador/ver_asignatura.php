@@ -14,9 +14,10 @@ if(!$id){
 $stmt = $pdo->prepare("
 SELECT 
     m.*, 
-    COALESCE(m.carrera_nombre, 'Sin carrera') as carrera,
+    COALESCE(c.nombre, 'Sin carrera') as carrera,
     sm.nombre as seriacion_nombre
 FROM materias m
+LEFT JOIN carreras c ON c.id = m.carrera_id
 LEFT JOIN materias sm ON sm.id = m.seriacion_id
 WHERE m.id = ?
 ");

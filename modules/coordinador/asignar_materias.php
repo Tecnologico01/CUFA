@@ -7,6 +7,7 @@ $periodo_id = $_GET['periodo_id'] ?? null;
 /* =========================
    LÓGICA DE INSERCIÓN
 ========================= */
+
 if($_SERVER['REQUEST_METHOD']=="POST"){
     $docente_id = $_POST['docente_id'] ?? null;
     $grupo_id   = $_POST['grupo_id'] ?? null;
@@ -16,14 +17,137 @@ if($_SERVER['REQUEST_METHOD']=="POST"){
     if(!$docente_id || !$grupo_id || !$materia_id || !$periodo_id){
         $mensaje = ["tipo"=>"error","texto"=>"Faltan datos obligatorios"];
     }else{
+
         try{
-            $stmt=$pdo->prepare("INSERT INTO asignaciones_docentes (docente_id,grupo_id,materia_id,periodo_id) VALUES (?,?,?,?)");
+
+            // 🔒 INICIAR TRANSACCIÓN
+            $pdo->beginTransaction();
+
+            /* =========================
+               VALIDAR DUPLICADO
+            ========================= */
+            $stmt = $pdo->prepare("
+                SELECT id FROM asignaciones_docentes 
+                WHERE docente_id=? AND grupo_id=? AND materia_id=? AND periodo_id=?
+            ");
             $stmt->execute([$docente_id,$grupo_id,$materia_id,$periodo_id]);
-            $mensaje = ["tipo"=>"success","texto"=>"Cátedra asignada correctamente"];
+
+            if($stmt->fetch()){
+                throw new Exception("Esta asignación ya existe");
+            }
+
+            /* =========================
+               INSERTAR ASIGNACIÓN
+            ========================= */
+            $stmt=$pdo->prepare("
+                INSERT INTO asignaciones_docentes 
+                (docente_id,grupo_id,materia_id,periodo_id) 
+                VALUES (?,?,?,?)
+            ");
+            $stmt->execute([$docente_id,$grupo_id,$materia_id,$periodo_id]);
+
+            /* =========================
+               CREAR PARCIALES
+            ========================= */
+
+            // 1. Obtener materia
+            $stmt = $pdo->prepare("
+                SELECT total_unidades, carrera_id 
+                FROM materias 
+                WHERE id = ?
+            ");
+            $stmt->execute([$materia_id]);
+            $materia = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if(!$materia || $materia['total_unidades'] <= 0){
+                throw new Exception("La materia no tiene unidades configuradas");
+            }
+
+            $total_parciales = (int)$materia['total_unidades'];
+            $carrera_id = $materia['carrera_id'];
+
+            // 2. Obtener periodo
+            $stmt = $pdo->prepare("
+                SELECT fecha_inicio, fecha_fin 
+                FROM periodos 
+                WHERE id = ?
+            ");
+            $stmt->execute([$periodo_id]);
+            $periodo = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if(!$periodo || !$periodo['fecha_inicio'] || !$periodo['fecha_fin']){
+                throw new Exception("El periodo no tiene fechas válidas");
+            }
+
+            $inicio = new DateTime($periodo['fecha_inicio']);
+            $fin    = new DateTime($periodo['fecha_fin']);
+
+            if($inicio >= $fin){
+                throw new Exception("Fechas de periodo inválidas");
+            }
+
+            // 3. Validar si ya existen parciales
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*) 
+                FROM parciales 
+                WHERE grupo_id=? AND materia_id=? AND periodo_id=?
+            ");
+            $stmt->execute([$grupo_id,$materia_id,$periodo_id]);
+
+            if($stmt->fetchColumn() > 0){
+                throw new Exception("Los parciales ya fueron generados");
+            }
+
+            // 4. Calcular duración
+            $dias_total = $inicio->diff($fin)->days;
+            $dias_por_parcial = ceil($dias_total / $total_parciales);
+
+            // 5. Insertar parciales
+            for($i = 1; $i <= $total_parciales; $i++){
+
+                $fecha_inicio_parcial = clone $inicio;
+                $fecha_inicio_parcial->modify('+' . (($i - 1) * $dias_por_parcial) . ' days');
+
+                $fecha_fin_parcial = clone $fecha_inicio_parcial;
+                $fecha_fin_parcial->modify('+' . $dias_por_parcial . ' days');
+
+                // Ajuste final
+                if($fecha_fin_parcial > $fin){
+                    $fecha_fin_parcial = clone $fin;
+                }
+
+                $stmt = $pdo->prepare("
+                    INSERT INTO parciales 
+                    (periodo_id, carrera_id, materia_id, grupo_id, numero, fecha_inicio, fecha_fin, activo)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+                ");
+
+                $stmt->execute([
+                    $periodo_id,
+                    $carrera_id,
+                    $materia_id,
+                    $grupo_id,
+                    $i,
+                    $fecha_inicio_parcial->format('Y-m-d'),
+                    $fecha_fin_parcial->format('Y-m-d')
+                ]);
+            }
+
+            // ✅ TODO OK
+            $pdo->commit();
+            $mensaje = ["tipo"=>"success","texto"=>"Cátedra y parciales creados correctamente"];
+
+        }catch(Exception $e){
+
+            // ❌ REVERSIÓN TOTAL
+            $pdo->rollBack();
+            $mensaje = ["tipo"=>"error","texto"=>$e->getMessage()];
+
         }catch(PDOException $e){
-            $mensaje = ($e->getCode()==23000) 
-                ? ["tipo"=>"error","texto"=>"Esta asignación ya existe en el sistema"]
-                : ["tipo"=>"error","texto"=>"Error inesperado en la base de datos"];
+
+            $pdo->rollBack();
+            $mensaje = ["tipo"=>"error","texto"=>"Error en la base de datos"];
+
         }
     }
 }
@@ -31,23 +155,42 @@ if($_SERVER['REQUEST_METHOD']=="POST"){
 /* =========================
    CONSULTAS DE DATOS
 ========================= */
-$periodos = $pdo->query("SELECT id,nombre FROM periodos WHERE activo=1 ORDER BY nombre DESC")->fetchAll();
-$docentes = $pdo->query("SELECT d.id, CONCAT(u.nombres,' ',u.apellido_paterno,' ',u.apellido_materno) AS nombre_completo 
-                         FROM docentes d JOIN usuarios u ON u.id=d.usuario_id ORDER BY u.nombres ASC")->fetchAll();
+
+$periodos = $pdo->query("
+    SELECT id,nombre 
+    FROM periodos 
+    WHERE activo=1 
+    ORDER BY nombre DESC
+")->fetchAll();
+
+$docentes = $pdo->query("
+    SELECT d.id, CONCAT(u.nombres,' ',u.apellido_paterno,' ',u.apellido_materno) AS nombre_completo 
+    FROM docentes d 
+    JOIN usuarios u ON u.id=d.usuario_id 
+    ORDER BY u.nombres ASC
+")->fetchAll();
 
 $materias = [];
 $asignadas = [];
-if($periodo_id){
-    // Filtrado inteligente: Solo materias que tienen grupos en este periodo
-    $materias = $pdo->query("
-        SELECT DISTINCT m.id, m.nombre, TRIM(m.carrera_nombre) as carrera_nombre
-        FROM materias m
-        JOIN grupos g ON LOWER(TRIM(g.carrera_nombre)) = LOWER(TRIM(m.carrera_nombre)) AND g.periodo_id = {$periodo_id}
-        WHERE m.carrera_nombre IS NOT NULL AND m.carrera_nombre != ''
-        ORDER BY m.nombre
-    ")->fetchAll();
 
-    $stmt = $pdo->prepare("SELECT materia_id FROM asignaciones_docentes WHERE periodo_id=?");
+if($periodo_id){
+
+    $stmt = $pdo->prepare("
+        SELECT DISTINCT m.id, m.nombre, m.carrera_id
+        FROM materias m
+        JOIN grupos g 
+            ON g.carrera_id = m.carrera_id
+            AND g.periodo_id = ?
+        ORDER BY m.nombre
+    ");
+    $stmt->execute([$periodo_id]);
+    $materias = $stmt->fetchAll();
+
+    $stmt = $pdo->prepare("
+        SELECT materia_id 
+        FROM asignaciones_docentes 
+        WHERE periodo_id=?
+    ");
     $stmt->execute([$periodo_id]);
     $asignadas = $stmt->fetchAll(PDO::FETCH_COLUMN);
 }
@@ -126,7 +269,7 @@ if($periodo_id){
                                 <?php foreach($materias as $m): 
                                     $status = in_array($m['id'],$asignadas) ? "● " : "○ ";
                                 ?>
-                                    <option value="<?= $m['id'] ?>" data-carrera="<?= htmlspecialchars($m['carrera_nombre']) ?>">
+                                    <option value="<?= $m['id'] ?>" data-carrera="<?= $m['carrera_id'] ?>">
                                         <?= $status ?><?= $m['nombre'] ?>
                                     </option>
                                 <?php endforeach; ?>
@@ -176,7 +319,7 @@ if($periodo_id){
                         </thead>
                         <tbody class="divide-y divide-slate-50">
                             <?php
-                            $stmt=$pdo->query("
+                            $stmt = $pdo->prepare("
                                 SELECT
                                     CONCAT(u.nombres,' ',u.apellido_paterno,' ',u.apellido_materno) AS docente,
                                     m.nombre AS materia,
@@ -188,8 +331,10 @@ if($periodo_id){
                                 JOIN materias m ON m.id=ad.materia_id
                                 JOIN grupos g ON g.id=ad.grupo_id
                                 JOIN periodos p ON p.id=ad.periodo_id
-                                ORDER BY p.nombre DESC, g.nombre ASC
+                                WHERE ad.periodo_id = ?
+                                ORDER BY g.nombre ASC
                             ");
+                            $stmt->execute([$periodo_id]);
 
                             while($a=$stmt->fetch()): ?>
                                 <tr class="hover:bg-indigo-50/30 transition-colors group">
@@ -220,18 +365,18 @@ if($periodo_id){
 
 <script>
 document.getElementById("materiaSelect").addEventListener("change", function(){
-    let carrera_nombre = this.options[this.selectedIndex].getAttribute("data-carrera");
-    let periodo_id = "<?= $periodo_id ?>";
+    let carrera_id = this.options[this.selectedIndex].getAttribute("data-carrera");
+    let periodo_id = "<?= $periodo_id ?? '' ?>";
     let select = document.getElementById("grupoSelect");
 
-    if(!carrera_nombre || !periodo_id){
+    if(!carrera_id || !periodo_id){
         select.innerHTML = "<option value=''>Seleccionar grupo</option>";
         return;
     }
 
     select.innerHTML = "<option>Procesando grupos...</option>";
 
-    fetch(`/sistema_academico/modules/coordinador/get_grupos_por_carrera.php?carrera_nombre=${encodeURIComponent(carrera_nombre)}&periodo_id=${periodo_id}`)
+    fetch(`/sistema_academico/modules/coordinador/get_grupos_por_carrera.php?carrera_id=${carrera_id}&periodo_id=${periodo_id}`)
     .then(res => res.json())
     .then(data => {
         select.innerHTML = "<option value=''>Seleccionar grupo</option>";
