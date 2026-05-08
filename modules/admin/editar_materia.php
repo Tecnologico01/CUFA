@@ -21,26 +21,19 @@ if(!$materia){
 }
 
 /* =========================
-   CARRERAS DESDE EL SISTEMA EXTERNO
+   CARRERAS LOCALES
 ========================= */
-$apiUrl = "https://sistema.cufa.edu.mx/api/carreras";
-$apiKey = "H6z0U6FpnMPsgfCAe7ijkiXiL22YEE+ybjRtiZtDKmQ=";
+$carreras = $pdo->query("
+    SELECT id, nombre
+    FROM carreras
+    ORDER BY nombre ASC
+")->fetchAll(PDO::FETCH_ASSOC);
 
-$ch = curl_init();
-curl_setopt_array($ch, [
-    CURLOPT_URL => $apiUrl,
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_HTTPHEADER => ["X-API-Key: $apiKey"],
-]);
-
-$response = curl_exec($ch);
-if (curl_errno($ch)) { die("Error en API: " . curl_error($ch)); }
-curl_close($ch);
-
-$data = json_decode($response, true);
-$carreras = $data['data'] ?? [];
 $mapCarreras = [];
-foreach ($carreras as $c) { $mapCarreras[$c['id']] = $c['nombre']; }
+
+foreach($carreras as $c){
+    $mapCarreras[$c['id']] = $c['nombre'];
+}
 
 $todas_materias = $pdo->query("SELECT id, nombre, clave FROM materias ORDER BY nombre ASC")->fetchAll();
 
@@ -67,21 +60,41 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     try{
         $stmt = $pdo->prepare("
         UPDATE materias SET
-            carrera_id = ?, carrera_nombre = ?, grado = ?, clave = ?, nombre = ?, nombre_corto = ?,
-            aula = ?, creditos = ?, tipo = ?, seriacion_id = ?, es_opcional = ?,
-            maneja_niveles = ?, area_formacion = ?, horas_docente = ?, horas_independientes = ?,
+            carrera_id = ?,
+            grado = ?,
+            clave = ?,
+            nombre = ?,
+            nombre_corto = ?,
+            aula = ?,
+            creditos = ?,
+            tipo = ?,
+            seriacion_id = ?,
+            es_opcional = ?,
+            maneja_niveles = ?,
+            area_formacion = ?,
+            horas_docente = ?,
+            horas_independientes = ?,
             total_unidades = ?
         WHERE id = ?
         ");
 
-        $carrera_nombre = $mapCarreras[$_POST['carrera_id']] ?? 'Desconocida';
-
         $stmt->execute([
-            $_POST['carrera_id'], $carrera_nombre, $_POST['grado'], $_POST['clave'],
-            $_POST['nombre'], $_POST['nombre_corto'], $_POST['aula'], $_POST['creditos'],
-            $_POST['tipo_modalidad'], $_POST['seriacion_id'] ?: null, $_POST['es_opcional'],
-            $_POST['maneja_niveles'], $_POST['area_formacion'], $_POST['horas_docente'],
-            $_POST['horas_independientes'], $_POST['total_unidades'], $id
+            $_POST['carrera_id'],
+            $_POST['grado'],
+            $_POST['clave'],
+            $_POST['nombre'],
+            $_POST['nombre_corto'],
+            $_POST['aula'],
+            $_POST['creditos'],
+            $_POST['tipo_modalidad'],
+            $_POST['seriacion_id'] ?: null,
+            $_POST['es_opcional'],
+            $_POST['maneja_niveles'],
+            $_POST['area_formacion'],
+            $_POST['horas_docente'],
+            $_POST['horas_independientes'],
+            $_POST['total_unidades'],
+            $id
         ]);
 
         $pdo->prepare("DELETE FROM materia_subasignatura WHERE materia_id=?")->execute([$id]);
@@ -161,7 +174,6 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
                                     </option>
                                 <?php endforeach; ?>
                             </select>
-                            <input type="hidden" name="carrera_nombre" id="carreraNombre">
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
@@ -282,7 +294,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
                                 <?php endif; ?>
                             <?php endforeach; ?>
                         </select>
-                    </div>
+                    </div> 
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="flex flex-col gap-1.5">
@@ -346,17 +358,6 @@ function render(){
         cont.appendChild(div);
     });
 }
-
-document.addEventListener("DOMContentLoaded", () => {
-    const select = document.querySelector("[name='carrera_id']");
-    const hidden = document.getElementById("carreraNombre");
-    function actualizarNombre(){
-        const selected = select.options[select.selectedIndex];
-        hidden.value = selected.getAttribute("data-nombre");
-    }
-    actualizarNombre();
-    select.addEventListener("change", actualizarNombre);
-});
 
 function toggleSubSelector(valor){
     let cont = document.getElementById("containerSubasignaturas");

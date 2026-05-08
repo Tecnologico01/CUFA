@@ -2,36 +2,36 @@
 require_once __DIR__ . '/../../includes/db.php';
 
 /* =========================
-   DATOS
+   DATOS LOCALES
 ========================= */
-$apiUrl = "https://sistema.cufa.edu.mx/api/carreras";
-$apiKey = "H6z0U6FpnMPsgfCAe7ijkiXiL22YEE+ybjRtiZtDKmQ=";
 
-$ch = curl_init();
-curl_setopt_array($ch, [
-    CURLOPT_URL => $apiUrl,
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_HTTPHEADER => ["X-API-Key: $apiKey"],
-]);
+$carreras = $pdo->query("
+    SELECT id, nombre
+    FROM carreras
+    ORDER BY nombre ASC
+")->fetchAll();
 
-$response = curl_exec($ch);
-if (curl_errno($ch)) { die("Error en API: " . curl_error($ch)); }
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
-
-if ($httpCode !== 200) { die("Error HTTP API: $httpCode"); }
-
-$data = json_decode($response, true);
-$carreras = $data['data'] ?? [];
+$todas_materias = $pdo->query("
+    SELECT id, nombre, clave
+    FROM materias
+    ORDER BY nombre ASC
+")->fetchAll();
 
 $todas_materias = $pdo->query("SELECT id, nombre, clave FROM materias ORDER BY nombre ASC")->fetchAll();
 
 /* 🔥 SOLO ÚLTIMAS 5 PARA EL LISTADO DE FONDO */
 $materias = $pdo->query("
-SELECT id, clave, nombre, nombre_corto, carrera_nombre as carrera, tipo
-FROM materias
-ORDER BY id DESC
-LIMIT 5
+    SELECT 
+        m.id,
+        m.clave,
+        m.nombre,
+        m.nombre_corto,
+        c.nombre AS carrera,
+        m.tipo
+    FROM materias m
+    INNER JOIN carreras c ON c.id = m.carrera_id
+    ORDER BY m.id DESC
+    LIMIT 5
 ")->fetchAll();
 
 /* =========================
@@ -47,21 +47,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $stmt = $pdo->prepare("
             INSERT INTO materias (
-                carrera_id, carrera_nombre, grado, clave, nombre, nombre_corto, aula, creditos, tipo,
-                seriacion_id, es_opcional, maneja_niveles, area_formacion,
-                horas_docente, horas_independientes, total_unidades
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            ");
+                carrera_id,
+                grado,
+                clave,
+                nombre,
+                nombre_corto,
+                aula,
+                creditos,
+                tipo,
+                seriacion_id,
+                es_opcional,
+                maneja_niveles,
+                area_formacion,
+                horas_docente,
+                horas_independientes,
+                total_unidades
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ");
 
-        $total_unidades = !empty($_POST['total_unidades']) ? (int)$_POST['total_unidades'] : 0;
-        $carrera_nombre = $_POST['carrera_nombre'] ?? 'Desconocida';
+        $total_unidades = !empty($_POST['total_unidades']) 
+        ? (int)$_POST['total_unidades'] 
+        : 1;
 
         $stmt->execute([
-            $_POST['carrera_id'], $carrera_nombre, $_POST['grado'], $_POST['clave'],
-            $_POST['nombre'], $_POST['nombre_corto'], $_POST['aula'], $_POST['creditos'],
-            $_POST['tipo_modalidad'], $_POST['seriacion_id'] ?: null, $_POST['es_opcional'],
-            $_POST['maneja_niveles'], $_POST['area_formacion'], $_POST['horas_docente'],
-            $_POST['horas_independientes'], $total_unidades
+            $_POST['carrera_id'],
+            $_POST['grado'],
+            $_POST['clave'],
+            $_POST['nombre'],
+            $_POST['nombre_corto'],
+            $_POST['aula'],
+            $_POST['creditos'],
+            $_POST['tipo_modalidad'],
+            $_POST['seriacion_id'] ?: null,
+            $_POST['es_opcional'],
+            $_POST['maneja_niveles'],
+            $_POST['area_formacion'],
+            $_POST['horas_docente'],
+            $_POST['horas_independientes'],
+            $total_unidades
         ]);
 
         $materia_id = $pdo->lastInsertId();
@@ -176,12 +199,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Carrera</label>
                                 <select name="carrera_id" id="carreraSelect" class="w-full p-4 bg-white border-2 border-slate-200 rounded-2xl font-bold outline-none focus:border-purple-500 appearance-none shadow-sm">
                                     <?php foreach($carreras as $c): ?>
-                                        <option value="<?= $c['id'] ?>" data-nombre="<?= $c['nombre'] ?>">
+                                        <option value="<?= $c['id'] ?>">
                                             <?= $c['nombre'] ?>
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <input type="hidden" name="carrera_nombre" id="carreraNombre">
                             </div>
                             <div>
                                 <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Grado</label>
@@ -395,15 +417,4 @@ function quitarSub(id){
     renderSeleccionadas();
     cargarSubasignaturas();
 }
-
-document.addEventListener("DOMContentLoaded", () => {
-    const select = document.getElementById("carreraSelect");
-    const hidden = document.getElementById("carreraNombre");
-    function actualizarNombre(){
-        const selected = select.options[select.selectedIndex];
-        hidden.value = selected.getAttribute("data-nombre");
-    }
-    actualizarNombre();
-    select.addEventListener("change", actualizarNombre);
-});
 </script>

@@ -28,7 +28,6 @@ try{
     // Subasignaturas
     $pdo->prepare("DELETE FROM materia_subasignatura WHERE materia_id = ?")->execute([$id]);
 
-    /*
     // Temas / unidades
     $pdo->prepare("DELETE FROM temas_materia WHERE materia_id = ?")->execute([$id]);
 
@@ -37,7 +36,7 @@ try{
 
     // Asignaciones docente-grupo
     $pdo->prepare("DELETE FROM asignaciones WHERE materia_id = ?")->execute([$id]);
-    */
+    
 
     /* =========================
        ELIMINAR MATERIA

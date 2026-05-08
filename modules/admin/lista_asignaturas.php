@@ -3,15 +3,19 @@ require_once __DIR__ . '/../../includes/db.php';
 
 $materias = $pdo->query("
 SELECT 
-    m.id, 
-    m.clave, 
-    m.nombre, 
-    m.nombre_corto, 
-    COALESCE(c.nombre, 'Sin carrera') as carrera, 
-    m.tipo
+    m.id,
+    m.clave,
+    m.nombre,
+    m.nombre_corto,
+    COALESCE(c.nombre, 'Sin carrera') AS carrera,
+    COALESCE(m.tipo, 'Presencial') AS tipo,
+    m.grado,
+    m.creditos,
+    m.total_unidades
 FROM materias m
-LEFT JOIN carreras c ON c.id = m.carrera_id
-ORDER BY m.nombre ASC
+LEFT JOIN carreras c 
+    ON c.id = m.carrera_id
+ORDER BY c.nombre ASC, m.grado ASC, m.nombre ASC
 ")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
@@ -47,7 +51,9 @@ ORDER BY m.nombre ASC
             ) ?>">
             
             <div class="absolute top-0 right-0 p-6 select-none opacity-[0.03] group-hover:opacity-10 transition-opacity">
-                <span class="text-4xl font-black italic uppercase leading-none"><?= $m['tipo'] ?></span>
+                <span class="text-4xl font-black italic uppercase leading-none">
+                    <?= htmlspecialchars($m['tipo']) ?>
+                </span>
             </div>
 
             <div class="relative z-10">
@@ -68,10 +74,24 @@ ORDER BY m.nombre ASC
                     </p>
                 </div>
 
-                <div class="flex items-center justify-between">
+                <div class="flex flex-wrap gap-2">
+
                     <span class="inline-block text-[9px] font-black bg-purple-50 text-purple-600 px-4 py-1 rounded-full uppercase tracking-widest border border-purple-100">
-                        <?= $m['tipo'] ?>
+                        <?= htmlspecialchars($m['tipo']) ?>
                     </span>
+
+                    <span class="inline-block text-[9px] font-black bg-blue-50 text-blue-600 px-4 py-1 rounded-full uppercase tracking-widest border border-blue-100">
+                        Grado <?= (int)$m['grado'] ?>
+                    </span>
+
+                    <span class="inline-block text-[9px] font-black bg-emerald-50 text-emerald-600 px-4 py-1 rounded-full uppercase tracking-widest border border-emerald-100">
+                        <?= (int)$m['total_unidades'] ?> Parciales
+                    </span>
+
+                    <span class="inline-block text-[9px] font-black bg-amber-50 text-amber-600 px-4 py-1 rounded-full uppercase tracking-widest border border-amber-100">
+                        <?= (int)$m['creditos'] ?> Créditos
+                    </span>
+
                 </div>
 
                 <div class="flex gap-3 mt-8 pt-6 border-t border-slate-50">
