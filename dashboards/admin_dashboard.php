@@ -126,9 +126,8 @@ $modulo = $_GET['modulo'] ?? 'inicio';
                     <span>Parciales</span>
                     <span class="text-[10px]">▼</span>
                 </button>
-                <div id="parciales-menu" class="submenu <?= in_array($modulo, ['parciales_activos', 'generar_parciales', 'parciales_anteriores']) ? '' : 'hidden' ?>">
+                <div id="parciales-menu" class="submenu <?= in_array($modulo, ['parciales_activos', 'parciales_anteriores']) ? '' : 'hidden' ?>">
                     <a href="?modulo=parciales_activos" class="menu-item text-sm <?= $modulo == 'parciales_activos' ? 'active-menu' : '' ?>">Parciales Activos</a>
-                    <a href="?modulo=generar_parciales" class="menu-item text-sm <?= $modulo == 'generar_parciales' ? 'active-menu' : '' ?>">Nuevo Parcial</a>
                     <a href="?modulo=parciales_anteriores" class="menu-item text-sm <?= $modulo == 'parciales_anteriores' ? 'active-menu' : '' ?>">Historial</a>
                 </div>
             </div>
@@ -202,11 +201,14 @@ $modulo = $_GET['modulo'] ?? 'inicio';
             case 'periodo_activo':
                 include '../modules/admin/periodo_activo.php';
                 break;
+            case 'editar_periodo':
+                include '../modules/admin/editar_periodo.php';
+                break;
+            case 'guardar_periodo':
+                include '../modules/admin/guardar_periodo.php';
+                break;
             case 'eliminar_periodo':
                 include '../modules/admin/eliminar_periodo.php';
-                break;
-            case 'generar_parciales':
-                include '../modules/admin/generar_parciales.php';
                 break;
             case 'parciales_activos':
                 include '../modules/admin/parciales_activos.php';

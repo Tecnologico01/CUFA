@@ -149,6 +149,9 @@ $modulo = $_GET['modulo'] ?? 'inicio';
             case 'mis_actividades':
                 include '../modules/docente/mis_actividades.php';
                 break;
+            case 'ver_unidad':
+                include '../modules/docente/ver_unidad.php';
+                break;
             case 'crear_actividad':
                 include '../modules/docente/crear_actividad.php';
                 break;

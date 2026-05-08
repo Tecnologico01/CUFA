@@ -7,7 +7,7 @@ if (!isset($_SESSION['user_id']) || $_SESSION['rol'] !== 'coordinador_academico'
     exit;
 }
 
-$nombre = $_SESSION['nombre'] ?? 'Usuario';
+$nombre = $_SESSION['nombres'] ?? 'Usuario';
 $modulo = $_GET['modulo'] ?? 'inicio';
 ?>
 
@@ -85,9 +85,9 @@ $modulo = $_GET['modulo'] ?? 'inicio';
                     <span class="text-[10px]">▼</span>
                 </button>
                 <div id="cat-menu" class="submenu <?= in_array($modulo, ['materias', 'carreras', 'gestionar_subasignaturas', 'tipo_subasignaturas']) ? '' : 'hidden' ?>">
+                    <a href="?modulo=sincronizar_carreras" class="menu-item text-sm <?= $modulo == 'sincronizar_carreras' ? 'active-menu' : '' ?>">Carreras</a>
                     <a href="?modulo=materias" class="menu-item text-sm <?= $modulo == 'materias' ? 'active-menu' : '' ?>">Gestión de Asignaturas</a>
                     <a href="?modulo=lista_asignaturas" class="menu-item text-sm <?= $modulo == 'lista_asignaturas' ? 'active-menu' : '' ?>">Asignaturas</a>
-                    <a href="?modulo=carreras" class="menu-item text-sm <?= $modulo == 'carreras' ? 'active-menu' : '' ?>">Carreras</a>
                     <a href="?modulo=gestionar_subasignaturas" class="menu-item text-sm <?= $modulo == 'gestionar_subasignaturas' ? 'active-menu' : '' ?>">Sub-Asignaturas</a>
                     <a href="?modulo=lista_subasignaturas" class="menu-item text-sm <?= $modulo == 'lista_subasignaturas' ? 'active-menu' : '' ?>">Ver Sub-Asignaturas</a>
                     <a href="?modulo=alta_docente" class="menu-item block hover:bg-purple-200 <?= $modulo == 'alta_docente' ? 'active-menu' : '' ?>">Alta de Docente</a>
@@ -103,6 +103,31 @@ $modulo = $_GET['modulo'] ?? 'inicio';
                 <div id="doc-menu" class="submenu <?= in_array($modulo, ['asignar_materias', 'ver_asignaciones']) ? '' : 'hidden' ?>">
                     <a href="?modulo=asignar_materias" class="menu-item text-sm <?= $modulo == 'asignar_materias' ? 'active-menu' : '' ?>">Asignar Asignaturas</a>
                     <a href="?modulo=ver_asignaciones" class="menu-item text-sm <?= $modulo == 'ver_asignaciones' ? 'active-menu' : '' ?>">Ver Asignaciones</a>
+                </div>
+            </div>
+            <div>
+                <button onclick="toggleMenu('grupos-menu')" class="w-full menu-item justify-between">
+                    <span class="flex items-center">
+                        <span class="mr-3 text-lg"></span> Grupos
+                    </span>
+                    <span class="text-[10px]">▼</span>
+                </button>
+
+                <div id="grupos-menu" 
+                    class="submenu <?= in_array($modulo, ['grupos','lista_grupos','editar_grupo']) ? '' : 'hidden' ?>">
+
+                    <!-- CREAR GRUPO -->
+                    <a href="?modulo=grupos" 
+                    class="menu-item text-sm <?= $modulo == 'grupos' ? 'active-menu' : '' ?>">
+                    Crear Grupo
+                    </a>
+
+                    <!-- LISTA DE GRUPOS -->
+                    <a href="?modulo=lista_grupos" 
+                    class="menu-item text-sm <?= $modulo == 'lista_grupos' ? 'active-menu' : '' ?>">
+                    Ver Grupos
+                    </a>
+
                 </div>
             </div>
 
@@ -174,9 +199,6 @@ $modulo = $_GET['modulo'] ?? 'inicio';
             case 'gestionar_subasignaturas':
                 include '../modules/coordinador/gestionar_subasignaturas.php';
                 break;
-            case 'editar_subasignatura':
-                include '/../modules/coordinador/editar_subasignatura.php';
-                break;
             case 'lista_asignaturas':
                 include '../modules/coordinador/lista_asignaturas.php';
                 break;
@@ -207,6 +229,24 @@ $modulo = $_GET['modulo'] ?? 'inicio';
             case 'habilitar_actas':
                 include '../modules/coordinador/habilitar_actas.php';
                 break;
+
+            case 'sincronizar_carreras':
+                include '../modules/coordinador/sincronizar_carreras.php';
+                break;
+
+
+            case 'grupos':
+                include '../modules/coordinador/gestion_grupos.php';
+                break;
+
+            case 'lista_grupos':
+                include '../modules/coordinador/lista_grupos.php';
+                break;
+
+            case 'editar_grupo':
+                include '../modules/coordinador/editar_grupo.php';
+                break;
+
             case 'riesgo_academico':
                 include '../modules/coordinador/riesgo_academico.php';
                 break;
