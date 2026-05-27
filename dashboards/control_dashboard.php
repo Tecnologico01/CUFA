@@ -1,8 +1,11 @@
 <?php
 session_start();
 
-if (!isset($_SESSION['user_id']) || $_SESSION['rol'] !== 'control_escolar') {
-    header("Location: ../login.php");
+if (
+    !isset($_SESSION['user_id']) ||
+    $_SESSION['rol_slug'] !== 'control_escolar'
+) {
+    header("Location: ../index.php");
     exit;
 }
 

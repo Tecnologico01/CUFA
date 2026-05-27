@@ -3,32 +3,43 @@ session_start();
 
 /* FUNCIÓN PARA REDIRIGIR SEGÚN ROL (Mantenida exactamante igual) */
 function redirigirPorRol($rol){
+
     switch($rol){
+
         case 'administrador':
-            header("Location: dashboards/admin_dashboard.php");
+            header("Location: dashboards/dashboard.php");
         break;
-        case 'coordinador_academico':
-            header("Location: dashboards/coordinador_dashboard.php");
+
+        case 'coordinador':
+            header("Location: dashboards/dashboard.php");
         break;
+
         case 'control_escolar':
-            header("Location: dashboards/control_dashboard.php");
+            header("Location: dashboards/dashboard.php");
         break;
+
         case 'docente':
-            header("Location: dashboards/docente_dashboard.php");
+            header("Location: dashboards/dashboard.php");
         break;
+
         case 'alumno':
-            header("Location: dashboards/alumno_dashboard.php");
+            header("Location: dashboards/dashboard.php");
         break;
-        case 'padre_familia':
-            header("Location: dashboards/padre_dashboard.php");
+
+        case 'padre':
+            header("Location: dashboards/dashboard.php");
         break;
+
+        default:
+            die("Rol no válido");
     }
+
     exit;
 }
 
 /* SI YA HAY SESIÓN */
 if (isset($_SESSION['user_id'])) {
-    redirigirPorRol($_SESSION['rol']);
+    redirigirPorRol($_SESSION['rol_slug']);
 }
 
 $error = '';
@@ -40,9 +51,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once 'includes/db.php';
 
     $stmt = $pdo->prepare("
-        SELECT id, nombres, rol, password_hash 
-        FROM usuarios 
-        WHERE username = ? AND activo = 1
+        SELECT 
+            u.id,
+            u.nombres,
+            u.rol_id,
+            r.slug,
+            u.password_hash
+
+        FROM usuarios u
+
+        INNER JOIN roles r
+            ON r.id = u.rol_id
+
+        WHERE u.username = ?
+        AND u.activo = 1
     ");
 
     $stmt->execute([$username]);
@@ -51,8 +73,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($user && password_verify($password, $user['password_hash'])) {
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['nombres'] = $user['nombres'];
-        $_SESSION['rol'] = $user['rol'];
-        redirigirPorRol($user['rol']);
+        $_SESSION['rol_id'] = $user['rol_id'];
+        $_SESSION['rol_slug'] = $user['slug'];
+        redirigirPorRol($user['slug']);
     } else {
         $error = "Credenciales incorrectas o usuario inactivo.";
     }

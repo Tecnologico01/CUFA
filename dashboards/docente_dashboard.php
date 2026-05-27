@@ -2,8 +2,11 @@
 session_start();
 
 /* VERIFICAR SESIÓN */
-if (!isset($_SESSION['user_id']) || $_SESSION['rol'] !== 'docente') {
-    header("Location: ../login.php");
+if (
+    !isset($_SESSION['user_id']) ||
+    $_SESSION['rol_slug'] !== 'docente'
+) {
+    header("Location: ../index.php");
     exit;
 }
 

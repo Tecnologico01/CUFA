@@ -2,8 +2,11 @@
 session_start();
 
 // Verificación de seguridad
-if (!isset($_SESSION['user_id']) || $_SESSION['rol'] !== 'coordinador_academico') {
-    header("Location: ../login.php");
+if (
+    !isset($_SESSION['user_id']) ||
+    $_SESSION['rol_slug'] !== 'coordinador'
+) {
+    header("Location: ../index.php");
     exit;
 }
 
@@ -107,28 +110,47 @@ $modulo = $_GET['modulo'] ?? 'inicio';
             </div>
             <div>
                 <button onclick="toggleMenu('grupos-menu')" class="w-full menu-item justify-between">
-                    <span class="flex items-center">
-                        <span class="mr-3 text-lg"></span> Grupos
-                    </span>
-                    <span class="text-[10px]">▼</span>
-                </button>
+    <span class="flex items-center">
+        <span class="mr-3 text-lg"></span> Grupos
+    </span>
 
-                <div id="grupos-menu" 
-                    class="submenu <?= in_array($modulo, ['grupos','lista_grupos','editar_grupo']) ? '' : 'hidden' ?>">
+    <span class="text-[10px]">▼</span>
+            </button>
 
-                    <!-- CREAR GRUPO -->
-                    <a href="?modulo=grupos" 
-                    class="menu-item text-sm <?= $modulo == 'grupos' ? 'active-menu' : '' ?>">
+            <div id="grupos-menu" 
+                class="submenu <?= in_array($modulo, [
+                    'grupos',
+                    'lista_grupos',
+                    'editar_grupo',
+                    'asignar_alumnos',
+                    'ver_asignaciones_alumnos'
+                ]) ? '' : 'hidden' ?>">
+
+                <!-- CREAR GRUPO -->
+                <a href="?modulo=grupos" 
+                class="menu-item text-sm <?= $modulo == 'grupos' ? 'active-menu' : '' ?>">
                     Crear Grupo
-                    </a>
+                </a>
 
-                    <!-- LISTA DE GRUPOS -->
-                    <a href="?modulo=lista_grupos" 
-                    class="menu-item text-sm <?= $modulo == 'lista_grupos' ? 'active-menu' : '' ?>">
+                <!-- VER GRUPOS -->
+                <a href="?modulo=lista_grupos" 
+                class="menu-item text-sm <?= $modulo == 'lista_grupos' ? 'active-menu' : '' ?>">
                     Ver Grupos
-                    </a>
+                </a>
 
-                </div>
+                <!-- ASIGNAR ALUMNOS -->
+                <a href="?modulo=asignar_alumnos" 
+                class="menu-item text-sm <?= $modulo == 'asignar_alumnos' ? 'active-menu' : '' ?>">
+                    Asignar Alumnos
+                </a>
+
+                <!-- VER ASIGNACIONES -->
+                <a href="?modulo=ver_asignaciones_alumnos" 
+                class="menu-item text-sm <?= $modulo == 'ver_asignaciones_alumnos' ? 'active-menu' : '' ?>">
+                    Ver Asignaciones
+                </a>
+
+            </div>
             </div>
 
             <div>
@@ -237,6 +259,12 @@ $modulo = $_GET['modulo'] ?? 'inicio';
 
             case 'grupos':
                 include '../modules/coordinador/gestion_grupos.php';
+                break;
+            case 'asignar_alumnos':
+                include '../modules/coordinador/asignar_alumnos.php';
+                break;
+            case 'ver_asignaciones_alumnos':
+                include '../modules/coordinador/ver_asignaciones_alumnos.php';
                 break;
 
             case 'lista_grupos':

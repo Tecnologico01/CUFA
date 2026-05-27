@@ -2,8 +2,11 @@
 session_start();
 
 // Verificación de seguridad para Administrador
-if (!isset($_SESSION['user_id']) || $_SESSION['rol'] !== 'administrador') {
-    header("Location: ../login.php");
+if (
+    !isset($_SESSION['user_id']) ||
+    $_SESSION['rol_slug'] !== 'administrador'
+) {
+    header("Location: ../index.php");
     exit;
 }
 
