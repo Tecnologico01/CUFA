@@ -50,19 +50,30 @@ $bloqueado = ($total_bloqueados > 0);
 
 /* CARGAR DATOS EXISTENTES */
 $stmtTemas = $pdo->prepare("
-    SELECT tm.*, 
-        a.nombre as act_nombre, 
-        a.descripcion as act_desc, 
-        a.fecha_cierre, 
-        a.valor, 
+    SELECT 
+        tm.*,
+        a.nombre AS act_nombre,
+        a.descripcion AS act_desc,
+        a.fecha_cierre,
+        a.valor,
         a.material_archivo
     FROM temas_materia tm
-    LEFT JOIN actividades a ON a.tema_id = tm.id
-    WHERE tm.asignacion_id = ? AND tm.parcial = ?
+    LEFT JOIN actividades a 
+        ON a.asignacion_id = tm.asignacion_id
+        AND a.parcial = tm.parcial
+        AND a.semana = tm.orden
+    WHERE tm.asignacion_id = ?
+    AND tm.parcial = ?
     ORDER BY tm.orden ASC
 ");
 $stmtTemas->execute([$asignacion_id, $num_unidad]);
-$temas_db = $stmtTemas->fetchAll(PDO::FETCH_ASSOC);
+$temas_raw = $stmtTemas->fetchAll(PDO::FETCH_ASSOC);
+
+$temas_db = [];
+
+foreach($temas_raw as $tema){
+    $temas_db[$tema['orden']] = $tema;
+}
 
 $stmtEx = $pdo->prepare("SELECT id FROM examenes WHERE asignacion_id=? AND parcial=? LIMIT 1");
 $stmtEx->execute([$asignacion_id, $num_unidad]);
@@ -76,88 +87,404 @@ if($ex_id){
 }
 
 /* LÓGICA DE GUARDADO */
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['guardar_unidad']) && !$bloqueado) {
-    try {
-        $pdo->beginTransaction();
-        $num_unidad = $_POST['num_unidad'];
-        $objetivo   = $_POST['objetivo_unidad'];
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['guardar_unidad'])) {
 
-        $pdo->prepare("DELETE FROM actividades WHERE asignacion_id=? AND parcial=?")->execute([$asignacion_id, $num_unidad]);
-        $pdo->prepare("DELETE FROM temas_materia WHERE asignacion_id=? AND parcial=?")->execute([$asignacion_id, $num_unidad]);
-        $pdo->prepare("DELETE FROM examenes WHERE asignacion_id=? AND parcial=?")->execute([$asignacion_id, $num_unidad]);
+    /* RECALCULAR BLOQUEO */
+    $stmtCheck = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM temas_materia
+        WHERE asignacion_id=? 
+        AND parcial=?
+        AND estado IN('enviado','aprobado')
+    ");
 
-        for ($i = 1; $i <= 5; $i++) {
-            $tema_txt = $_POST["tema_$i"] ?? '';
-            if (trim($tema_txt) == '') continue;
+    $stmtCheck->execute([
+        $asignacion_id,
+        $_POST['num_unidad']
+    ]);
 
-            $ruta_rubrica = null;
+    $bloqueado_actual = $stmtCheck->fetchColumn();
 
-            if(isset($_FILES["rubrica_pdf_$i"]) && $_FILES["rubrica_pdf_$i"]['error'] == 0){
-                $archivo = $_FILES["rubrica_pdf_$i"];
-                if($archivo['type'] == "application/pdf"){
-                    $nombre_archivo = time() . "_rubrica_" . $i . ".pdf";
-                    $ruta_destino = "uploads/rubricas/" . $nombre_archivo;
-                    if(!is_dir("uploads/rubricas")){
-                        mkdir("uploads/rubricas", 0777, true);
+    if($bloqueado_actual > 0){
+        $error = "La unidad ya fue enviada o aprobada.";
+    } else {
+
+        try {
+
+            $pdo->beginTransaction();
+
+            $num_unidad = $_POST['num_unidad'];
+            $objetivo   = trim($_POST['objetivo_unidad']);
+            $nombreUnidad = trim($_POST['nombre_unidad']);
+
+            /* =========================
+               ELIMINAR EXAMEN ANTERIOR
+            ========================== */
+
+            $stmtOldEx = $pdo->prepare("
+                SELECT id 
+                FROM examenes
+                WHERE asignacion_id=? 
+                AND parcial=?
+            ");
+
+            $stmtOldEx->execute([
+                $asignacion_id,
+                $num_unidad
+            ]);
+
+            $oldExamen = $stmtOldEx->fetchColumn();
+
+            if($oldExamen){
+
+                $pdo->prepare("
+                    DELETE FROM preguntas_examen
+                    WHERE examen_id=?
+                ")->execute([$oldExamen]);
+
+                $pdo->prepare("
+                    DELETE FROM examenes
+                    WHERE id=?
+                ")->execute([$oldExamen]);
+            }
+
+            /* =========================
+               RECORRER TEMAS
+            ========================== */
+
+            for ($i = 1; $i <= 5; $i++) {
+
+                $tema_txt = trim($_POST["tema_$i"] ?? '');
+
+                if ($tema_txt == '') {
+                    continue;
+                }
+
+                $subtema      = trim($_POST["subtema_$i"] ?? '');
+                $video        = trim($_POST["video_$i"] ?? '');
+                $estilo       = trim($_POST["estilo_$i"] ?? '');
+                $pres         = trim($_POST["pres_$i"] ?? '');
+                $biblio       = trim($_POST["biblio_$i"] ?? '');
+                $estrategia   = trim($_POST["estrategia_$i"] ?? '');
+
+                /* =========================
+                   VERIFICAR SI YA EXISTE
+                ========================== */
+
+                $stmtExiste = $pdo->prepare("
+                    SELECT id
+                    FROM temas_materia
+                    WHERE asignacion_id=?
+                    AND parcial=?
+                    AND orden=?
+                    LIMIT 1
+                ");
+
+                $stmtExiste->execute([
+                    $asignacion_id,
+                    $num_unidad,
+                    $i
+                ]);
+
+                $tema_existente = $stmtExiste->fetch(PDO::FETCH_ASSOC);
+
+                /* =========================
+                   UPDATE
+                ========================== */
+
+                if($tema_existente){
+
+                    $tema_id = $tema_existente['id'];
+
+                    $stmtUpdate = $pdo->prepare("
+                        UPDATE temas_materia SET
+                            tema=?,
+                            subtemas=?,
+                            objetivo_unidad=?,
+                            video_referencia=?,
+                            estilos_aprendizaje=?,
+                            presentacion_infografia=?,
+                            bibliografia_complementaria=?,
+                            estrategia_didactica=?,
+                            nombre_unidad=?,
+                            estado='enviado'
+                        WHERE id=?
+                    ");
+
+                    $stmtUpdate->execute([
+                        $tema_txt,
+                        $subtema,
+                        $objetivo,
+                        $video,
+                        $estilo,
+                        $pres,
+                        $biblio,
+                        $estrategia,
+                        $nombreUnidad,
+                        $tema_id
+                    ]);
+
+                } else {
+
+                    /* =========================
+                       INSERT
+                    ========================== */
+
+                    $stmtInsert = $pdo->prepare("
+                        INSERT INTO temas_materia (
+                            asignacion_id,
+                            parcial,
+                            tema,
+                            subtemas,
+                            objetivo_unidad,
+                            orden,
+                            video_referencia,
+                            estilos_aprendizaje,
+                            presentacion_infografia,
+                            bibliografia_complementaria,
+                            estrategia_didactica,
+                            estado,
+                            nombre_unidad
+                        ) VALUES (
+                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'enviado', ?
+                        )
+                    ");
+
+                    $stmtInsert->execute([
+                        $asignacion_id,
+                        $num_unidad,
+                        $tema_txt,
+                        $subtema,
+                        $objetivo,
+                        $i,
+                        $video,
+                        $estilo,
+                        $pres,
+                        $biblio,
+                        $estrategia,
+                        $nombreUnidad
+                    ]);
+
+                    $tema_id = $pdo->lastInsertId();
+                }
+
+                /* =========================
+                   ACTIVIDAD
+                ========================== */
+
+                $act_nombre = trim($_POST["act_nombre_$i"] ?? '');
+                $act_desc   = trim($_POST["act_desc_$i"] ?? '');
+                $act_fecha  = !empty($_POST["act_fecha_$i"])
+                    ? $_POST["act_fecha_$i"]
+                    : null;
+
+                $act_valor  = !empty($_POST["act_valor_$i"])
+                    ? $_POST["act_valor_$i"]
+                    : 0;
+
+                /* =========================
+                   ARCHIVO PDF
+                ========================== */
+
+                $ruta_rubrica = null;
+
+                /* CONSERVAR ARCHIVO EXISTENTE */
+
+                $stmtArchivo = $pdo->prepare("
+                    SELECT material_archivo
+                    FROM actividades
+                    WHERE tema_id=?
+                    LIMIT 1
+                ");
+
+                $stmtArchivo->execute([$tema_id]);
+
+                $archivoAnterior = $stmtArchivo->fetchColumn();
+
+                if($archivoAnterior){
+                    $ruta_rubrica = $archivoAnterior;
+                }
+
+                /* NUEVO ARCHIVO */
+
+                if(
+                    isset($_FILES["rubrica_pdf_$i"]) &&
+                    $_FILES["rubrica_pdf_$i"]['error'] == 0
+                ){
+
+                    $archivo = $_FILES["rubrica_pdf_$i"];
+
+                    $extension = strtolower(pathinfo(
+                        $archivo['name'],
+                        PATHINFO_EXTENSION
+                    ));
+
+                    $carpetaFisica = __DIR__ . '/uploads/rubricas/';
+
+                    if(!is_dir($carpetaFisica)){
+                        mkdir($carpetaFisica, 0777, true);
                     }
-                    move_uploaded_file($archivo['tmp_name'], $ruta_destino);
-                    $ruta_rubrica = $ruta_destino;
+
+                    $nombreArchivo = uniqid('rubrica_') . '.pdf';
+
+                    $rutaFisica = $carpetaFisica . $nombreArchivo;
+
+                    if(move_uploaded_file($archivo['tmp_name'], $rutaFisica)){
+
+                        /* RUTA QUE SE GUARDA EN MYSQL */
+                        $ruta_rubrica = 'modules/docente/uploads/rubricas/' . $nombreArchivo;
+
+                    }
+                }
+
+                /* =========================
+                   ACTIVIDAD EXISTE?
+                ========================== */
+
+                $stmtActExiste = $pdo->prepare("
+                    SELECT id
+                    FROM actividades
+                    WHERE asignacion_id=?
+                    AND parcial=?
+                    AND semana=?
+                    LIMIT 1
+                ");
+
+                $stmtActExiste->execute([
+                    $asignacion_id,
+                    $num_unidad,
+                    $i
+                ]);
+
+                $actividad = $stmtActExiste->fetch(PDO::FETCH_ASSOC);
+
+                if($actividad){
+
+                    $stmtActUpdate = $pdo->prepare("
+                        UPDATE actividades SET
+                            nombre=?,
+                            descripcion=?,
+                            fecha_cierre=?,
+                            valor=?,
+                            material_archivo=?
+                        WHERE asignacion_id=?
+                        AND parcial=?
+                        AND semana=?
+                    ");
+
+                    $stmtActUpdate->execute([
+                        $act_nombre,
+                        $act_desc,
+                        $act_fecha,
+                        $act_valor,
+                        $ruta_rubrica,
+                        $asignacion_id,
+                        $num_unidad,
+                        $i
+                    ]);
+
+                } else {
+
+                    $stmtActInsert = $pdo->prepare("
+                        INSERT INTO actividades (
+                            asignacion_id,
+                            semana,
+                            nombre,
+                            descripcion,
+                            fecha_apertura,
+                            fecha_cierre,
+                            valor,
+                            tipo_archivo,
+                            material_archivo,
+                            parcial,
+                            tema_id
+                        ) VALUES (
+                            ?,?,?,?,?,?,?,?,?,?,?
+                        )
+                    ");
+
+                    $stmtActInsert->execute([
+                        $asignacion_id,
+                        $i,
+                        $act_nombre,
+                        $act_desc,
+                        date("Y-m-d"),
+                        $act_fecha,
+                        $act_valor,
+                        'pdf',
+                        $ruta_rubrica,
+                        $num_unidad,
+                        $tema_id
+                    ]);
                 }
             }
 
-            $stmt = $pdo->prepare("
-                INSERT INTO temas_materia 
-                (asignacion_id, parcial, tema, subtemas, objetivo_unidad, orden, video_referencia, 
-                estilos_aprendizaje, presentacion_infografia, bibliografia_complementaria, estrategia_didactica, estado, nombre_unidad)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?, 'enviado', ?)
+            /* =========================
+               EXAMEN
+            ========================== */
+
+            $stmtE = $pdo->prepare("
+                INSERT INTO examenes (
+                    asignacion_id,
+                    parcial,
+                    titulo
+                ) VALUES (?,?,?)
             ");
-            $stmt->execute([
-                $asignacion_id, $num_unidad, $tema_txt, $_POST["subtema_$i"] ?? '', $objetivo, $i,
-                $_POST["video_$i"] ?? '', $_POST["estilo_$i"] ?? '', $_POST["pres_$i"] ?? '', 
-                $_POST["biblio_$i"] ?? '', $_POST["estrategia_$i"] ?? '', $_POST["nombre_unidad"] ?? ''
+
+            $stmtE->execute([
+                $asignacion_id,
+                $num_unidad,
+                "Examen Unidad $num_unidad"
             ]);
 
-            $tema_id = $pdo->lastInsertId();
-            $act_nombre = $_POST["act_nombre_$i"] ?? '';
+            $nuevo_examen_id = $pdo->lastInsertId();
 
-            if (trim($act_nombre) != '') {
-                $stmtAct = $pdo->prepare("
-                    INSERT INTO actividades
-                    (asignacion_id, semana, nombre, descripcion, fecha_apertura, fecha_cierre, valor, tipo_archivo, material_archivo, parcial, tema_id)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            for ($r = 1; $r <= 20; $r++) {
+
+                $pregunta = trim($_POST["pregunta_$r"] ?? '');
+
+                if($pregunta == ''){
+                    continue;
+                }
+
+                $stmtPreg = $pdo->prepare("
+                    INSERT INTO preguntas_examen (
+                        examen_id,
+                        pregunta,
+                        opcion_a,
+                        opcion_b,
+                        opcion_c,
+                        opcion_d,
+                        respuesta_correcta
+                    ) VALUES (?,?,?,?,?,?,?)
                 ");
 
-                $stmtAct->execute([
-                    $asignacion_id, $i, $act_nombre, $_POST["act_desc_$i"] ?? '', date("Y-m-d"),
-                    $_POST["act_fecha_$i"] ?: null, $_POST["act_valor_$i"] ?: 0, 'pdf',
-                    $ruta_rubrica, $num_unidad, $tema_id
+                $stmtPreg->execute([
+                    $nuevo_examen_id,
+                    $pregunta,
+                    $_POST["a_$r"] ?? '',
+                    $_POST["b_$r"] ?? '',
+                    $_POST["c_$r"] ?? '',
+                    $_POST["d_$r"] ?? '',
+                    $_POST["correcta_$r"] ?? ''
                 ]);
             }
+
+            $pdo->commit();
+            $bloqueado = true;
+
+            if (ob_get_length()) ob_end_clean();
+
+            header("Location: ?modulo=definir_unidades&asignacion=$asignacion_id&unidad=$num_unidad&success=1");
+            exit;
+            
+
+        } catch (Exception $e) {
+
+            $pdo->rollBack();
+
+            $error = $e->getMessage();
         }
-
-        $stmtE = $pdo->prepare("INSERT INTO examenes (asignacion_id, parcial, titulo) VALUES (?,?,?)");
-        $stmtE->execute([$asignacion_id, $num_unidad, "Examen Unidad $num_unidad"]);
-        $nuevo_examen_id = $pdo->lastInsertId();
-
-        for ($r = 1; $r <= 20; $r++) {
-            if (!empty($_POST["pregunta_$r"])) {
-                $stmtR = $pdo->prepare("
-                    INSERT INTO preguntas_examen (examen_id, pregunta, opcion_a, opcion_b, opcion_c, opcion_d, respuesta_correcta)
-                    VALUES (?,?,?,?,?,?,?)
-                ");
-                $stmtR->execute([
-                    $nuevo_examen_id, $_POST["pregunta_$r"], $_POST["a_$r"] ?? '', $_POST["b_$r"] ?? '',
-                    $_POST["c_$r"] ?? '', $_POST["d_$r"] ?? '', $_POST["correcta_$r"] ?? ''
-                ]);
-            }
-        }
-
-        $pdo->commit();
-        header("Location: ?definir_unidades=$asignacion_id&unidad=$num_unidad&success=1");
-        exit;
-    } catch (Exception $e) {
-        $pdo->rollBack();
-        $error = "Error al guardar: " . $e->getMessage();
     }
 }
 ?>
@@ -204,7 +531,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['guardar_unidad']) && !
     <?php if(isset($_GET['success'])): ?>
         <div class="bg-emerald-500 text-white p-5 rounded-[2rem] mb-10 flex items-center gap-4 shadow-lg shadow-emerald-100 animate-bounce">
             <div class="bg-white/20 p-2 rounded-xl text-lg">✓</div>
-            <p class="text-xs font-black uppercase tracking-widest">Los cambios en la unidad han sido registrados correctamente en el servidor.</p>
+            <p class="text-xs font-black uppercase tracking-widest">Los cambios en la planeación han sido registrados correctamente.</p>
         </div>
     <?php endif; ?>
 
@@ -230,7 +557,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['guardar_unidad']) && !
                 </div>
                 <div class="md:col-span-3 space-y-3">
                     <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Nombre de la Unidad</label>
-                    <input type="text" name="nombre_unidad" value="<?= htmlspecialchars($temas_db[0]['nombre_unidad'] ?? '') ?>" 
+                    <input type="text" name="nombre_unidad" value="<?= htmlspecialchars($temas_db[1]['nombre_unidad'] ?? '') ?>" 
                         placeholder="Ingrese el nombre oficial de la unidad..."
                         class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-800 focus:ring-4 focus:ring-purple-100 outline-none transition-all" <?= $bloqueado?'disabled':'' ?>>
                 </div>
@@ -238,7 +565,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['guardar_unidad']) && !
                     <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Objetivo General de Aprendizaje</label>
                     <textarea name="objetivo_unidad" rows="2" 
                         placeholder="Defina el objetivo pedagógico para esta unidad..."
-                        class="w-full p-6 bg-slate-50 border border-slate-200 rounded-[2.5rem] font-medium text-slate-600 focus:ring-4 focus:ring-purple-100 outline-none transition-all" <?= $bloqueado?'disabled':'' ?>><?= htmlspecialchars($temas_db[0]['objetivo_unidad'] ?? '') ?></textarea>
+                        class="w-full p-6 bg-slate-50 border border-slate-200 rounded-[2.5rem] font-medium text-slate-600 focus:ring-4 focus:ring-purple-100 outline-none transition-all" <?= $bloqueado?'disabled':'' ?>><?= htmlspecialchars($temas_db[1]['objetivo_unidad'] ?? '') ?></textarea>
                 </div>
             </div>
         </section>
@@ -256,7 +583,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['guardar_unidad']) && !
             </div>
 
             <div class="space-y-16">
-                <?php for($i=1;$i<=5;$i++): $t = $temas_db[$i-1] ?? null; ?>
+                <?php for($i=1;$i<=5;$i++): $t = $temas_db[$i] ?? null; ?>
                 <div class="bg-white rounded-[4rem] border border-slate-200 shadow-sm overflow-hidden group hover:shadow-xl transition-all duration-500">
                     <!-- Banner de Sesión -->
                     <div class="bg-slate-50 px-12 py-5 flex justify-between items-center border-b border-slate-100 group-hover:bg-slate-100 transition-colors">
@@ -421,7 +748,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['guardar_unidad']) && !
     </form>
 
     <footer class="mt-24 pb-12 text-center border-t border-slate-200 pt-12">
-        <p class="text-[10px] font-black text-slate-300 uppercase tracking-[0.6em]">Secretaría Académica // Dirección de Gestión de Calidad Universitaria</p>
+        <p class="text-[10px] font-black text-slate-300 uppercase tracking-[0.6em]">Coordinación Académica // CUFA</p>
     </footer>
 </div>
 
