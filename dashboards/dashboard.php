@@ -277,6 +277,21 @@ $modulos = [
         'permiso' => 'ver_planeaciones'
     ],
 
+    'planeacion_semanal' => [
+        'archivo' => 'modules/planeaciones/planeacion_semanal.php',
+        'permiso' => 'ver_planeaciones'
+    ],
+
+    'ver_temas' => [
+        'archivo' => 'modules/planeaciones/ver_temas.php',
+        'permiso' => 'ver_planeaciones'
+    ],
+
+    'semanas_actividades' => [
+        'archivo' => 'modules/planeaciones/semanas_actividades.php',
+        'permiso' => 'ver_semanas_actividades'
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | ACTIVIDADES
@@ -314,9 +329,29 @@ $modulos = [
         'permiso' => 'ver_calificaciones'
     ],
 
+    'subir_calificaciones' => [
+        'archivo' => 'modules/calificaciones/subir_calificaciones.php',
+        'permiso' => 'subir_calificaciones'
+    ],
+
+    'editar_calificacion' => [
+        'archivo' => 'modules/calificaciones/editar_calificacion.php',
+        'permiso' => 'editar_calificaciones'
+    ],
+
     'revisar_calificaciones' => [
         'archivo' => 'modules/calificaciones/revisar_calificaciones.php',
         'permiso' => 'revisar_calificaciones'
+    ],
+
+    'generar_actas' => [
+        'archivo' => 'modules/calificaciones/generar_actas.php',
+        'permiso' => 'generar_actas'
+    ],
+
+    'habilitar_actas' => [
+        'archivo' => 'modules/calificaciones/habilitar_actas.php',
+        'permiso' => 'habilitar_actas'
     ],
 
     'mis_examenes_alumnos' => [
@@ -338,6 +373,11 @@ $modulos = [
     'consulta_academica' => [
         'archivo' => 'modules/control_escolar/consulta_academica.php',
         'permiso' => 'ver_consulta_academica'
+    ],
+
+    'ver_acta' => [
+        'archivo' => 'modules/control_escolar/ver_acta.php',
+        'permiso' => 'ver_actas'
     ],
 
     'actas' => [
@@ -747,9 +787,6 @@ function panelTitulo($modulo){
     </div>
 
     <div class="bg-white rounded-3xl shadow-xl border border-slate-100 p-10 text-center">
-        <div class="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-6">
-            <span class="text-4xl">👋</span>
-        </div>
 
         <h2 class="text-2xl font-bold text-slate-800 mb-4">
             Bienvenido, <?= htmlspecialchars($nombre) ?>
@@ -769,7 +806,7 @@ function panelTitulo($modulo){
             <section class="bg-white rounded-3xl shadow-xl shadow-blue-100/30 border border-blue-50 p-8">
 
                 <h2 class="text-xl font-bold mb-6 text-blue-900 border-b border-blue-50 pb-4 flex items-center gap-3">
-                    <span class="p-2 bg-blue-100 rounded-xl">👥</span>
+                    <span class="p-2 bg-blue-100 rounded-xl"></span>
                     Usuarios del sistema
                 </h2>
 
@@ -792,7 +829,7 @@ function panelTitulo($modulo){
             <section class="bg-white rounded-3xl shadow-xl shadow-cyan-100/30 border border-cyan-50 p-8">
 
                 <h2 class="text-xl font-bold mb-6 text-cyan-900 border-b border-cyan-50 pb-4 flex items-center gap-3">
-                    <span class="p-2 bg-cyan-100 rounded-xl">🎓</span>
+                    <span class="p-2 bg-cyan-100 rounded-xl"></span>
                     Alumnos
                 </h2>
 
@@ -825,7 +862,7 @@ function panelTitulo($modulo){
             <section class="bg-white rounded-3xl shadow-xl shadow-indigo-100/30 border border-indigo-50 p-8">
 
                 <h2 class="text-xl font-bold mb-6 text-indigo-900 border-b border-indigo-50 pb-4 flex items-center gap-3">
-                    <span class="p-2 bg-indigo-100 rounded-xl">📚</span>
+                    <span class="p-2 bg-indigo-100 rounded-xl"></span>
                     Asignaturas
                 </h2>
 
@@ -860,7 +897,7 @@ function panelTitulo($modulo){
             <section class="bg-white rounded-3xl shadow-xl shadow-purple-100/30 border border-purple-50 p-8">
 
                 <h2 class="text-xl font-bold mb-6 text-purple-900 border-b border-purple-50 pb-4 flex items-center gap-3">
-                    <span class="p-2 bg-purple-100 rounded-xl">🏫</span>
+                    <span class="p-2 bg-purple-100 rounded-xl"></span>
                     Grupos y asignaciones
                 </h2>
 
@@ -897,7 +934,7 @@ function panelTitulo($modulo){
     <section class="bg-white rounded-3xl shadow-xl shadow-orange-100/30 border border-orange-50 p-8">
 
         <h2 class="text-xl font-bold mb-6 text-orange-900 border-b border-orange-50 pb-4 flex items-center gap-3">
-            <span class="p-2 bg-orange-100 rounded-xl">🧑‍🏫</span>
+            <span class="p-2 bg-orange-100 rounded-xl"></span>
             Gestión docente
         </h2>
 
@@ -918,7 +955,7 @@ function panelTitulo($modulo){
     <section class="bg-white rounded-3xl shadow-xl shadow-indigo-100/30 border border-indigo-50 p-8">
 
         <h2 class="text-xl font-bold mb-6 text-indigo-900 border-b border-indigo-50 pb-4 flex items-center gap-3">
-            <span class="p-2 bg-indigo-100 rounded-xl">📘</span>
+            <span class="p-2 bg-indigo-100 rounded-xl"></span>
             Mi aula docente
         </h2>
 
@@ -947,7 +984,7 @@ function panelTitulo($modulo){
     <section class="bg-white rounded-3xl shadow-xl shadow-cyan-100/30 border border-cyan-50 p-8">
 
         <h2 class="text-xl font-bold mb-6 text-cyan-900 border-b border-cyan-50 pb-4 flex items-center gap-3">
-            <span class="p-2 bg-cyan-100 rounded-xl">🎓</span>
+            <span class="p-2 bg-cyan-100 rounded-xl"></span>
             Portal estudiantil
         </h2>
 
@@ -980,7 +1017,7 @@ function panelTitulo($modulo){
     <section class="bg-white rounded-3xl shadow-xl shadow-amber-100/30 border border-amber-50 p-8">
 
         <h2 class="text-xl font-bold mb-6 text-amber-900 border-b border-amber-50 pb-4 flex items-center gap-3">
-            <span class="p-2 bg-amber-100 rounded-xl">📝</span>
+            <span class="p-2 bg-amber-100 rounded-xl"></span>
             Planeaciones didácticas
         </h2>
 
@@ -1007,7 +1044,7 @@ function panelTitulo($modulo){
     <section class="bg-white rounded-3xl shadow-xl shadow-teal-100/30 border border-teal-50 p-8">
 
         <h2 class="text-xl font-bold mb-6 text-teal-900 border-b border-teal-50 pb-4 flex items-center gap-3">
-            <span class="p-2 bg-teal-100 rounded-xl">📁</span>
+            <span class="p-2 bg-teal-100 rounded-xl"></span>
             Control escolar
         </h2>
 
@@ -1016,12 +1053,30 @@ function panelTitulo($modulo){
                 <a href="?modulo=consulta_academica" class="action-card">Consulta académica</a>
             <?php endif; ?>
 
+            <?php if(tienePermiso('habilitar_actas')): ?>
+                <a href="?modulo=habilitar_actas" class="action-card">
+                    Habilitar actas
+                </a>
+            <?php endif; ?>
+
             <?php if(tienePermiso('ver_actas')): ?>
                 <a href="?modulo=actas" class="action-card">Actas oficiales</a>
             <?php endif; ?>
 
             <?php if(tienePermiso('ver_boletas')): ?>
                 <a href="?modulo=boletas" class="action-card">Boletas estudiantiles</a>
+            <?php endif; ?>
+
+            <?php if(tienePermiso('revisar_calificaciones')): ?>
+                <a href="?modulo=revisar_calificaciones" class="action-card">
+                    Revisar calificaciones
+                </a>
+            <?php endif; ?>
+
+            <?php if(tienePermiso('generar_actas')): ?>
+                <a href="?modulo=generar_actas" class="action-card">
+                    Generar actas
+                </a>
             <?php endif; ?>
         </div>
 
@@ -1032,7 +1087,7 @@ function panelTitulo($modulo){
     <section class="bg-white rounded-3xl shadow-xl shadow-red-100/30 border border-red-50 p-8">
 
         <h2 class="text-xl font-bold mb-6 text-red-900 border-b border-red-50 pb-4 flex items-center gap-3">
-            <span class="p-2 bg-red-100 rounded-xl">🔐</span>
+            <span class="p-2 bg-red-100 rounded-xl"></span>
             Seguridad y permisos
         </h2>
 
