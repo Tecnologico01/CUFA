@@ -1,103 +1,124 @@
 <?php
-session_start();
 require_once __DIR__ . '/../../includes/db.php';
 
-// 🔒 VALIDAR SESIÓN
-if (!isset($_SESSION['user_id']) || $_SESSION['rol'] !== 'coordinador_academico') {
-    header("Location: /sistema_academico/login.php");
-    exit;
-}
-
-// 🚫 SOLO POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header("Location: /sistema_academico/dashboards/coordinador_dashboard.php?modulo=revisar_planeaciones_digital");
+    header("Location: /sistema_academico/");
     exit;
 }
 
-// 🧹 DATOS
-$asignacion_id = filter_input(INPUT_POST, 'asignacion_id', FILTER_VALIDATE_INT);
-$estado = $_POST['accion'] ?? null;
+/* =========================
+   DATOS
+========================= */
+$asignacion_id = $_POST['asignacion_id'] ?? null;
+$accion        = $_POST['accion'] ?? null;
 $observaciones = trim($_POST['observaciones'] ?? '');
 
-$estados_validos = ['aprobado', 'rechazado'];
+/* =========================
+   VALIDAR DATOS
+========================= */
+if (!$asignacion_id || !$accion) {
+    die("Datos incompletos");
+}
 
-if (!$asignacion_id || !in_array($estado, $estados_validos)) {
-    header("Location: /sistema_academico/dashboards/coordinador_dashboard.php?modulo=revisar_planeaciones_digital&status=error");
-    exit;
+/* =========================
+   VALIDAR ACCIÓN
+========================= */
+if (!in_array($accion, ['aprobado', 'rechazado'])) {
+    die("Acción inválida");
 }
 
 try {
 
     $pdo->beginTransaction();
 
-    // ✅ 1. ESTADO GENERAL (NO LO BORRES)
-    $stmt = $pdo->prepare("
-        UPDATE asignaciones_docentes 
-        SET estado_planeacion = ?, 
-            observaciones_planeacion = ?, 
-            fecha_revision = NOW() 
+    /* =========================
+       VERIFICAR ASIGNACIÓN
+    ========================= */
+    $stmtAsignacion = $pdo->prepare("
+        SELECT id
+        FROM asignaciones_docentes
+        WHERE id = ?
+        LIMIT 1
+    ");
+
+    $stmtAsignacion->execute([$asignacion_id]);
+
+    $asignacion = $stmtAsignacion->fetch(PDO::FETCH_ASSOC);
+
+    if (!$asignacion) {
+        throw new Exception("La asignación no existe");
+    }
+
+    /* =========================
+       DEFINIR BLOQUEO
+    ========================= */
+
+    // Si se APRUEBA:
+    // - queda bloqueada
+    // - el docente ya no puede editar
+
+    // Si se RECHAZA:
+    // - se desbloquea
+    // - el docente puede corregir
+
+    $planeacion_bloqueada = ($accion === 'aprobado') ? 1 : 0;
+
+    /* =========================
+       ACTUALIZAR ASIGNACIÓN
+    ========================= */
+    $stmtActualizar = $pdo->prepare("
+        UPDATE asignaciones_docentes
+        SET
+            estado_planeacion = ?,
+            observaciones_planeacion = ?,
+            planeacion_bloqueada = ?
         WHERE id = ?
     ");
-    $stmt->execute([$estado, $observaciones, $asignacion_id]);
 
-    // 🔥 2. CONTROL REAL DE TEMAS
-    if ($estado === 'rechazado') {
+    $stmtActualizar->execute([
+        $accion,
+        $observaciones,
+        $planeacion_bloqueada,
+        $asignacion_id
+    ]);
 
-        $stmtUnlock = $pdo->prepare("
-            UPDATE temas_materia 
-            SET estado = 'borrador'
-            WHERE asignacion_id = ? AND estado = 'enviado'
-        ");
-        $stmtUnlock->execute([$asignacion_id]);
+    /* =========================
+       ACTUALIZAR TEMAS
+    ========================= */
 
-        error_log("Desbloqueados: " . $stmtUnlock->rowCount());
+    // También actualizamos los registros
+    // de temas_materia para mantener
+    // coherencia visual del sistema.
 
-    } else {
+    $estado_tema = ($accion === 'aprobado')
+        ? 'aprobado'
+        : 'rechazado';
 
-        $stmtLock = $pdo->prepare("
-            UPDATE temas_materia 
-            SET estado = 'aprobado'
-            WHERE asignacion_id = ?
-        ");
-        $stmtLock->execute([$asignacion_id]);
-
-        error_log("Bloqueados: " . $stmtLock->rowCount());
-    }
-
-    // 📩 NOTIFICACIÓN
-    $stmtInfo = $pdo->prepare("
-        SELECT d.usuario_id, m.nombre AS materia_nombre 
-        FROM asignaciones_docentes ad 
-        JOIN docentes d ON ad.docente_id = d.id 
-        JOIN materias m ON ad.materia_id = m.id 
-        WHERE ad.id = ?
+    $stmtTemas = $pdo->prepare("
+        UPDATE temas_materia
+        SET estado = ?
+        WHERE asignacion_id = ?
     ");
-    $stmtInfo->execute([$asignacion_id]);
-    $data = $stmtInfo->fetch(PDO::FETCH_ASSOC);
 
-    if ($data) {
-
-        $mensaje = ($estado === 'aprobado')
-            ? "✅ Planeación APROBADA de {$data['materia_nombre']}"
-            : "⚠️ Planeación RECHAZADA de {$data['materia_nombre']}. Motivo: " . ($observaciones ?: "Sin observaciones");
-
-        $stmtNotif = $pdo->prepare("
-            INSERT INTO notificaciones (usuario_id, mensaje, leido, fecha)
-            VALUES (?, ?, 0, NOW())
-        ");
-        $stmtNotif->execute([$data['usuario_id'], $mensaje]);
-    }
+    $stmtTemas->execute([
+        $estado_tema,
+        $asignacion_id
+    ]);
 
     $pdo->commit();
 
-    header("Location: /sistema_academico/dashboards/coordinador_dashboard.php?modulo=revisar_planeaciones_digital&status=ok");
+    /* =========================
+       REDIRECCIÓN
+    ========================= */
+    header("Location: /sistema_academico/dashboards/coordinador_dashboard.php?modulo=ver_planeaciones&success=1");
     exit;
 
 } catch (Exception $e) {
 
-    $pdo->rollBack();
-    error_log("ERROR: " . $e->getMessage());
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
 
-    header("Location: /sistema_academico/dashboards/coordinador_dashboard.php?modulo=revisar_planeaciones_digital&status=error_db");
-    exit;
+    die("Error: " . $e->getMessage());
 }
+?>

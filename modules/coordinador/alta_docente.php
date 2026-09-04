@@ -1,82 +1,325 @@
 <?php
-require_once __DIR__ . '/../../includes/db.php';
 
-$error = ''; $mensaje = ''; $credenciales = '';
+require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/permisos.php';
+
+validarPermiso('crear_docentes');
+
+$error = '';
+$mensaje = '';
+$credenciales = '';
 
 /* =========================
-   1. LÓGICA DE SERVIDOR (PHP)
-   ========================= */
-function limpiarTexto($texto) {
-    $unwanted_array = array(
-        'Š'=>'S', 'š'=>'s', 'Ž'=>'Z', 'ž'=>'z', 'À'=>'A', 'Á'=>'A', 'Â'=>'A', 'Ã'=>'A', 'Ä'=>'A', 'Å'=>'A', 'Æ'=>'A', 'Ç'=>'C',
-        'È'=>'E', 'É'=>'E', 'Ê'=>'E', 'Ë'=>'E', 'Ì'=>'I', 'Í'=>'I', 'Î'=>'I', 'Ï'=>'I', 'Ñ'=>'N', 'Ò'=>'O', 'Ó'=>'O', 'Ô'=>'O',
-        'Õ'=>'O', 'Ö'=>'O', 'Ø'=>'O', 'Ù'=>'U', 'Ú'=>'U', 'Û'=>'U', 'Ü'=>'U', 'Ý'=>'Y', 'Þ'=>'B', 'ß'=>'Ss', 'à'=>'a', 'á'=>'a',
-        'â'=>'a', 'ã'=>'a', 'ä'=>'a', 'å'=>'a', 'æ'=>'a', 'ç'=>'c', 'è'=>'e', 'é'=>'e', 'ê'=>'e', 'ë'=>'e', 'ì'=>'i', 'í'=>'i',
-        'î'=>'i', 'ï'=>'i', 'ð'=>'o', 'ñ'=>'n', 'ò'=>'o', 'ó'=>'o', 'ô'=>'o', 'õ'=>'o', 'ö'=>'o', 'ø'=>'o', 'ù'=>'u', 'ú'=>'u',
-        'û'=>'u', 'ü'=>'u', 'ý'=>'y', 'þ'=>'b', 'ÿ'=>'y'
+   FUNCIONES AUXILIARES
+========================= */
+
+function limpiarTexto($texto){
+
+    $texto = strtoupper(trim($texto));
+
+    $buscar = [
+        'Á','É','Í','Ó','Ú','Ñ'
+    ];
+
+    $reemplazar = [
+        'A','E','I','O','U','N'
+    ];
+
+    return str_replace(
+        $buscar,
+        $reemplazar,
+        $texto
     );
-    return strtoupper(strtr($texto ?? '', $unwanted_array));
 }
 
-function obtenerPrefijoIdentificador($nombres, $ap, $am) {
-    $n = limpiarTexto($nombres);
-    $p = limpiarTexto($ap);
-    $m = $am ? limpiarTexto($am) : 'X';
-    $letra1 = substr($p, 0, 1);
-    $vocal_interna = 'X';
-    $p_fragmento = substr($p, 1);
-    if (preg_match('/[AEIOU]/', $p_fragmento, $matches)) { $vocal_interna = $matches[0]; }
-    return $letra1 . $vocal_interna . substr($m, 0, 1) . substr($n, 0, 1);
+function generarUsername($nombres, $apellido){
+
+    $base =
+        strtolower(substr($nombres,0,1)) .
+        strtolower(limpiarTexto($apellido));
+
+    return preg_replace(
+        '/[^a-z0-9]/',
+        '',
+        $base
+    ) . rand(10,99);
 }
 
-function subirArchivo($file, $ruta, $prefijo) {
-    if (isset($file['error']) && $file['error'] === 0) {
-        $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
-        $nombre = $prefijo . "_" . time() . "_" . rand(100,999) . "." . $ext;
-        if (move_uploaded_file($file['tmp_name'], $ruta . $nombre)) {
+function subirArchivo($file, $ruta, $prefijo){
+
+    if(
+        isset($file['error']) &&
+        $file['error'] === 0
+    ){
+
+        $ext = strtolower(
+            pathinfo(
+                $file['name'],
+                PATHINFO_EXTENSION
+            )
+        );
+
+        $permitidos = [
+            'pdf','jpg','jpeg','png'
+        ];
+
+        if(!in_array($ext, $permitidos)){
+            return null;
+        }
+
+        $nombre =
+            $prefijo .
+            '_' .
+            time() .
+            '_' .
+            rand(100,999) .
+            '.' .
+            $ext;
+
+        if(
+            move_uploaded_file(
+                $file['tmp_name'],
+                $ruta . $nombre
+            )
+        ){
+
             return 'uploads/docentes/' . $nombre;
         }
     }
+
     return null;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    try {
+/* =========================
+   OBTENER ROL DOCENTE
+========================= */
+
+$stmtRol = $pdo->prepare("
+    SELECT id
+    FROM roles
+    WHERE slug = 'docente'
+    LIMIT 1
+");
+
+$stmtRol->execute();
+
+$rol_docente_id = $stmtRol->fetchColumn();
+
+if(!$rol_docente_id){
+
+    die("No existe el rol docente.");
+}
+
+/* =========================
+   PROCESAR FORMULARIO
+========================= */
+
+if($_SERVER['REQUEST_METHOD'] === 'POST'){
+
+    try{
+
         $pdo->beginTransaction();
+
         $nombres = trim($_POST['nombres']);
         $ap_p = trim($_POST['apellido_paterno']);
         $ap_m = trim($_POST['apellido_materno']);
-        $username = strtolower(substr($nombres,0,1) . limpiarTexto($ap_p) . rand(10,99));
-        $numero = "DOC" . rand(1000,9999);
 
-        // 1. Inserción Usuario (Credenciales)
-        $stmtU = $pdo->prepare("INSERT INTO usuarios (nombres, apellido_paterno, apellido_materno, username, email, password_hash, rol, numero_identificador, activo) VALUES (?,?,?,?,?,?, 'docente', ?, 1)");
-        $stmtU->execute([$nombres, $ap_p, $ap_m, $username, $_POST['email'], password_hash($_POST['password'], PASSWORD_DEFAULT), $numero]);
-        $usuario_id = $pdo->lastInsertId();
+        $email = trim($_POST['email']);
 
-        // 2. Inserción Tabla Docentes
-        $stmtD = $pdo->prepare("INSERT INTO docentes (usuario_id, rfc, curp, direccion, fecha_contratacion, licenciatura, licenciatura_titulo, licenciatura_cedula, maestria, maestria_titulo, maestria_cedula, doctorado, doctorado_titulo, doctorado_cedula) VALUES (?,?,?,?,NOW(),?,?,?,?,?,?,?,?,?)");
-        $stmtD->execute([$usuario_id, strtoupper($_POST['rfc']), strtoupper($_POST['curp']), $_POST['direccion'], $_POST['licenciatura'], $_POST['lic_titulo_folio'], $_POST['lic_cedula_folio'], $_POST['maestria'], $_POST['mae_titulo_folio'], $_POST['mae_cedula_folio'], $_POST['doctorado'], $_POST['doc_titulo_folio'], $_POST['doc_cedula_folio']]);
-        $docente_id = $pdo->lastInsertId();
+        /* =========================
+           VALIDAR EMAIL DUPLICADO
+        ========================= */
 
-        // 3. Carga de Documentos (INE, Comprobante, CURP, RFC + Académicos)
-        $upload_dir = __DIR__ . '/../../uploads/docentes/';
-        if (!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
-        $stmtDoc = $pdo->prepare("INSERT INTO documentos_docente (docente_id, tipo, archivo) VALUES (?,?,?)");
-        
-        foreach ($_FILES as $tipo => $file) {
-            $ruta = subirArchivo($file, $upload_dir, $tipo);
-            if ($ruta) $stmtDoc->execute([$docente_id, $tipo, $ruta]);
+        $stmt = $pdo->prepare("
+            SELECT id
+            FROM usuarios
+            WHERE email = ?
+            LIMIT 1
+        ");
+
+        $stmt->execute([$email]);
+
+        if($stmt->fetch()){
+
+            throw new Exception(
+                "El correo ya está registrado."
+            );
+        }
+
+        /* =========================
+           GENERAR CREDENCIALES
+        ========================= */
+
+        $username = generarUsername(
+            $nombres,
+            $ap_p
+        );
+
+        $password = trim($_POST['password']);
+
+        $numero_identificador =
+            'DOC' . rand(1000,9999);
+
+        /* =========================
+           CREAR USUARIO
+        ========================= */
+
+        $stmtUsuario = $pdo->prepare("
+            INSERT INTO usuarios
+            (
+                nombres,
+                apellido_paterno,
+                apellido_materno,
+                username,
+                email,
+                password_hash,
+                rol_id,
+                numero_identificador,
+                activo
+            )
+            VALUES
+            (
+                ?,?,?,?,?,?,?,?,1
+            )
+        ");
+
+        $stmtUsuario->execute([
+            $nombres,
+            $ap_p,
+            $ap_m,
+            $username,
+            $email,
+            password_hash(
+                $password,
+                PASSWORD_DEFAULT
+            ),
+            $rol_docente_id,
+            $numero_identificador
+        ]);
+
+        $usuario_id =
+            $pdo->lastInsertId();
+
+        /* =========================
+           CREAR DOCENTE
+        ========================= */
+
+        $stmtDocente = $pdo->prepare("
+            INSERT INTO docentes
+            (
+                usuario_id,
+                rfc,
+                curp,
+                direccion,
+                fecha_contratacion,
+                licenciatura,
+                licenciatura_titulo,
+                licenciatura_cedula,
+                maestria,
+                maestria_titulo,
+                maestria_cedula,
+                doctorado,
+                doctorado_titulo,
+                doctorado_cedula
+            )
+            VALUES
+            (
+                ?,?,?,?,
+                NOW(),
+                ?,?,?,?,?,?,?,?,?
+            )
+        ");
+
+        $stmtDocente->execute([
+
+            $usuario_id,
+
+            strtoupper($_POST['rfc']),
+            strtoupper($_POST['curp']),
+
+            $_POST['direccion'],
+
+            $_POST['licenciatura'],
+            $_POST['lic_titulo_folio'],
+            $_POST['lic_cedula_folio'],
+
+            $_POST['maestria'],
+            $_POST['mae_titulo_folio'],
+            $_POST['mae_cedula_folio'],
+
+            $_POST['doctorado'],
+            $_POST['doc_titulo_folio'],
+            $_POST['doc_cedula_folio']
+        ]);
+
+        $docente_id =
+            $pdo->lastInsertId();
+
+        /* =========================
+           SUBIR DOCUMENTOS
+        ========================= */
+
+        $upload_dir =
+            __DIR__ .
+            '/../../uploads/docentes/';
+
+        if(!is_dir($upload_dir)){
+
+            mkdir(
+                $upload_dir,
+                0777,
+                true
+            );
+        }
+
+        $stmtDocumento = $pdo->prepare("
+            INSERT INTO documentos_docente
+            (
+                docente_id,
+                tipo,
+                archivo
+            )
+            VALUES
+            (
+                ?,?,?
+            )
+        ");
+
+        foreach($_FILES as $tipo => $file){
+
+            $ruta = subirArchivo(
+                $file,
+                $upload_dir,
+                $tipo
+            );
+
+            if($ruta){
+
+                $stmtDocumento->execute([
+                    $docente_id,
+                    $tipo,
+                    $ruta
+                ]);
+            }
         }
 
         $pdo->commit();
-        $mensaje = "Registro completado con éxito.";
-        $credenciales = "<b>Usuario:</b> $username | <b>Pass:</b> " . $_POST['password'];
-    } catch(Exception $e) {
+
+        $mensaje =
+            "Docente registrado correctamente.";
+
+        $credenciales =
+            "Usuario: {$username}
+             | Contraseña: {$password}";
+
+    }catch(Exception $e){
+
         $pdo->rollBack();
-        $error = "Error: " . $e->getMessage();
+
+        $error = $e->getMessage();
     }
 }
+
 ?>
 
 <div class="max-w-7xl mx-auto p-6 bg-slate-50 min-h-screen font-sans">
