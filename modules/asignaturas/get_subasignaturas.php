@@ -9,13 +9,13 @@ header('Content-Type: application/json; charset=utf-8');
    VALIDAR PERMISO
 ========================= */
 
-if(!tienePermiso('crear_asignaturas')){
-    
+if (!tienePermiso('ver_subasignaturas')) {
+
     http_response_code(403);
 
     echo json_encode([
-        'error' => true,
-        'mensaje' => 'No autorizado'
+        'success' => false,
+        'mensaje' => 'No tiene permisos para consultar subasignaturas.'
     ]);
 
     exit;
@@ -24,7 +24,7 @@ if(!tienePermiso('crear_asignaturas')){
 try {
 
     $stmt = $pdo->query("
-        SELECT 
+        SELECT
             id,
             clave,
             nombre
@@ -34,14 +34,19 @@ try {
 
     $subasignaturas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    echo json_encode($subasignaturas);
+    echo json_encode([
+        'success' => true,
+        'total' => count($subasignaturas),
+        'data' => $subasignaturas
+    ]);
 
-} catch(Exception $e){
+} catch (PDOException $e) {
 
     http_response_code(500);
 
     echo json_encode([
-        'error' => true,
-        'mensaje' => 'Error al obtener subasignaturas'
+        'success' => false,
+        'mensaje' => 'Error al obtener las subasignaturas.',
+        'error' => $e->getMessage()
     ]);
 }

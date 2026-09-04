@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/permisos.php';
 
-validarPermiso('ver_subasignaturas');
+validarPermiso('ver_detalle_subasignatura');
 
 $id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 
@@ -18,6 +18,7 @@ $stmt = $pdo->prepare("
     SELECT *
     FROM subasignaturas
     WHERE id = ?
+    LIMIT 1
 ");
 
 $stmt->execute([$id]);
@@ -28,15 +29,17 @@ if(!$suba){
     exit;
 }
 
-/* Materias donde se usa */
 $stmt = $pdo->prepare("
     SELECT 
         m.id,
         m.clave,
-        m.nombre
+        m.nombre,
+        COALESCE(c.nombre, 'Sin carrera') AS carrera
     FROM materia_subasignatura ms
     INNER JOIN materias m
         ON m.id = ms.materia_id
+    LEFT JOIN carreras c
+        ON c.id = m.carrera_id
     WHERE ms.subasignatura_id = ?
     ORDER BY m.nombre ASC
 ");
@@ -73,14 +76,14 @@ $materias = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <div class="flex gap-3">
 
             <?php if($puedeEditar): ?>
-                <a href="?modulo=editar_subasignatura&id=<?= $suba['id'] ?>"
+                <a href="?modulo=editar_subasignatura&id=<?= (int)$suba['id'] ?>"
                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all">
                     Editar
                 </a>
             <?php endif; ?>
 
             <?php if($puedeEliminar): ?>
-                <a href="?modulo=eliminar_subasignatura&id=<?= $suba['id'] ?>"
+                <a href="?modulo=eliminar_subasignatura&id=<?= (int)$suba['id'] ?>"
                    onclick="return confirm('¿Seguro que deseas eliminar esta subasignatura?')"
                    class="bg-red-500 hover:bg-red-600 text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all">
                     Eliminar
@@ -103,7 +106,7 @@ $materias = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             <div class="mb-12">
                 <span class="inline-block px-4 py-1 bg-purple-50 text-purple-600 rounded-full text-[10px] font-black tracking-widest uppercase mb-4 border border-purple-100">
-                    ID: <?= htmlspecialchars($suba['id']) ?> | Clave: <?= htmlspecialchars($suba['clave']) ?>
+                    ID: <?= (int)$suba['id'] ?> | Clave: <?= htmlspecialchars($suba['clave']) ?>
                 </span>
 
                 <h2 class="text-4xl font-black text-slate-800 leading-tight">
@@ -165,7 +168,6 @@ $materias = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
 
             <div class="mt-16 pt-10 border-t border-slate-50">
-
                 <div class="flex items-center gap-3 mb-6">
                     <div class="w-1 h-6 bg-purple-600 rounded-full"></div>
 
@@ -190,7 +192,6 @@ $materias = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
 
             <div class="mt-16 pt-10 border-t border-slate-50">
-
                 <div class="flex items-center gap-3 mb-6">
                     <div class="w-1 h-6 bg-indigo-600 rounded-full"></div>
 
@@ -204,13 +205,19 @@ $materias = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                         <?php foreach($materias as $m): ?>
-                            <a href="?modulo=ver_asignatura&id=<?= $m['id'] ?>"
+                            <a href="?modulo=ver_asignatura&id=<?= (int)$m['id'] ?>"
                                class="bg-slate-900 p-4 rounded-2xl flex items-center gap-3 group hover:bg-purple-600 transition-all">
                                 <div class="w-2 h-2 rounded-full bg-purple-500 group-hover:bg-white"></div>
 
-                                <span class="text-[10px] font-black text-slate-300 italic group-hover:text-white transition-colors">
-                                    <?= htmlspecialchars($m['clave'] . ' - ' . $m['nombre']) ?>
-                                </span>
+                                <div>
+                                    <span class="block text-[10px] font-black text-slate-300 italic group-hover:text-white transition-colors">
+                                        <?= htmlspecialchars($m['clave'] . ' - ' . $m['nombre']) ?>
+                                    </span>
+
+                                    <span class="block text-[8px] text-slate-500 group-hover:text-purple-100 font-bold uppercase mt-1">
+                                        <?= htmlspecialchars($m['carrera']) ?>
+                                    </span>
+                                </div>
                             </a>
                         <?php endforeach; ?>
 

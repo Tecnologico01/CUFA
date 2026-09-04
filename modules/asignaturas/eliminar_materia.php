@@ -3,68 +3,136 @@
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/permisos.php';
 
-if(!tienePermiso('eliminar_asignaturas')){
-    echo "<div class='p-6 text-red-600 font-bold'>Acceso denegado</div>";
-    exit;
-}
-
-if($_SERVER['REQUEST_METHOD'] !== 'GET'){
-    exit('Método no permitido');
-}
+validarPermiso('eliminar_asignaturas');
 
 $id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 
-if($id <= 0){
+function redirigirListaMaterias($mensaje = '', $tipo = 'info'){
+    $url = "?modulo=lista_asignaturas";
 
-    header("Location: /sistema_academico/dashboards/dashboard.php?modulo=lista_asignaturas");
+    if($mensaje !== ''){
+        $url .= "&{$tipo}=" . urlencode($mensaje);
+    }
+
+    echo "
+    <script>
+        window.location.href='{$url}';
+    </script>
+    ";
     exit;
 }
 
+if($id <= 0){
+    redirigirListaMaterias('Materia no válida', 'error');
+}
+
 try{
+
     $pdo->beginTransaction();
 
     /* =========================
        VALIDAR EXISTENCIA
     ========================= */
-    $stmt = $pdo->prepare("SELECT id FROM materias WHERE id = ?");
-    $stmt->execute([$id]);
+    $stmt = $pdo->prepare("
+        SELECT id, nombre, clave
+        FROM materias
+        WHERE id = ?
+        LIMIT 1
+    ");
 
-    if(!$stmt->fetch()){
+    $stmt->execute([$id]);
+    $materia = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if(!$materia){
         throw new Exception("Materia no encontrada");
     }
 
     /* =========================
-       ELIMINAR RELACIONES
+       VALIDAR SERIACIÓN
+       Si otra materia depende de esta, no se elimina.
+    ========================= */
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM materias
+        WHERE seriacion_id = ?
+    ");
+    $stmt->execute([$id]);
+
+    if((int)$stmt->fetchColumn() > 0){
+        throw new Exception("No puedes eliminar esta materia porque otra asignatura la usa como seriación.");
+    }
+
+    /* =========================
+       VALIDAR ASIGNACIONES DOCENTES
+    ========================= */
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM asignaciones_docentes
+        WHERE materia_id = ?
+    ");
+    $stmt->execute([$id]);
+
+    if((int)$stmt->fetchColumn() > 0){
+        throw new Exception("No puedes eliminar esta materia porque tiene asignaciones docentes activas.");
+    }
+
+    /* =========================
+       VALIDAR MALLAS CURRICULARES
+    ========================= */
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM malla_materias
+        WHERE materia_id = ?
+    ");
+    $stmt->execute([$id]);
+
+    if((int)$stmt->fetchColumn() > 0){
+        throw new Exception("No puedes eliminar esta materia porque está vinculada a una malla curricular.");
+    }
+
+    /* =========================
+       ELIMINAR RELACIONES DIRECTAS SEGURAS
     ========================= */
 
-    // Subasignaturas
-    $pdo->prepare("DELETE FROM materia_subasignatura WHERE materia_id = ?")->execute([$id]);
-
-    // Temas / unidades
-    $pdo->prepare("DELETE FROM temas_materia WHERE materia_id = ?")->execute([$id]);
-
-    // Calificaciones
-    $pdo->prepare("DELETE FROM calificaciones WHERE materia_id = ?")->execute([$id]);
-
-    // Asignaciones docente-grupo
-    $pdo->prepare("DELETE FROM asignaciones WHERE materia_id = ?")->execute([$id]);
-    
+    $pdo->prepare("
+        DELETE FROM materia_subasignatura
+        WHERE materia_id = ?
+    ")->execute([$id]);
 
     /* =========================
        ELIMINAR MATERIA
     ========================= */
-    $pdo->prepare("DELETE FROM materias WHERE id = ?")->execute([$id]);
+    $stmt = $pdo->prepare("
+        DELETE FROM materias
+        WHERE id = ?
+    ");
+
+    $stmt->execute([$id]);
 
     $pdo->commit();
 
-    header("Location: /sistema_academico/dashboards/dashboard.php?modulo=lista_asignaturas&msg=eliminado");
+    echo "
+    <script>
+        alert('Materia eliminada correctamente');
+        window.location.href='?modulo=lista_asignaturas';
+    </script>
+    ";
     exit;
 
 }catch(Exception $e){
 
-    $pdo->rollBack();
+    if($pdo->inTransaction()){
+        $pdo->rollBack();
+    }
 
-    header("Location: /sistema_academico/dashboards/dashboard.php?modulo=lista_asignaturas&error=1");
+    $msg = htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8');
+
+    echo "
+    <script>
+        alert('{$msg}');
+        window.location.href='?modulo=lista_asignaturas';
+    </script>
+    ";
     exit;
 }
 ?>

@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/permisos.php';
 
-validarPermiso('ver_asignaturas');
+validarPermiso('ver_detalle_asignatura');
 
 $id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 
@@ -14,16 +14,22 @@ if($id <= 0){
 $puedeEditar = tienePermiso('editar_asignaturas');
 $puedeEliminar = tienePermiso('eliminar_asignaturas');
 
-/* MATERIA */
+/* =========================
+   MATERIA
+========================= */
 $stmt = $pdo->prepare("
     SELECT 
         m.*, 
         COALESCE(c.nombre, 'Sin carrera') AS carrera,
-        sm.nombre AS seriacion_nombre
+        sm.nombre AS seriacion_nombre,
+        sm.clave AS seriacion_clave
     FROM materias m
-    LEFT JOIN carreras c ON c.id = m.carrera_id
-    LEFT JOIN materias sm ON sm.id = m.seriacion_id
+    LEFT JOIN carreras c 
+        ON c.id = m.carrera_id
+    LEFT JOIN materias sm 
+        ON sm.id = m.seriacion_id
     WHERE m.id = ?
+    LIMIT 1
 ");
 
 $stmt->execute([$id]);
@@ -34,12 +40,18 @@ if(!$materia){
     exit;
 }
 
-/* SUBASIGNATURAS */
+/* =========================
+   SUBASIGNATURAS
+========================= */
 $stmt = $pdo->prepare("
     SELECT 
         s.id,
         s.clave,
-        s.nombre
+        s.nombre,
+        s.recurso,
+        s.horas_frente_grupo,
+        s.horas_independiente,
+        s.creditos
     FROM materia_subasignatura ms
     INNER JOIN subasignaturas s 
         ON s.id = ms.subasignatura_id
@@ -79,14 +91,14 @@ $subas = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <div class="flex gap-3">
 
             <?php if($puedeEditar): ?>
-                <a href="?modulo=editar_materia&id=<?= $materia['id'] ?>"
+                <a href="?modulo=editar_materia&id=<?= (int)$materia['id'] ?>"
                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all">
                     Editar
                 </a>
             <?php endif; ?>
 
             <?php if($puedeEliminar): ?>
-                <a href="?modulo=eliminar_materia&id=<?= $materia['id'] ?>"
+                <a href="?modulo=eliminar_materia&id=<?= (int)$materia['id'] ?>"
                    onclick="return confirm('¿Seguro que deseas eliminar esta asignatura?')"
                    class="bg-red-500 hover:bg-red-600 text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all">
                     Eliminar
@@ -200,22 +212,26 @@ $subas = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <div class="flex justify-between items-center border-b border-slate-100 pb-2">
                         <span class="text-xs font-bold text-slate-500 uppercase">Asignatura Antecesora</span>
                         <span class="font-black text-purple-600 italic text-[10px]">
-                            <?= htmlspecialchars($materia['seriacion_nombre'] ?: 'Ninguna') ?>
+                            <?php if(!empty($materia['seriacion_nombre'])): ?>
+                                <?= htmlspecialchars($materia['seriacion_clave'] . ' - ' . $materia['seriacion_nombre']) ?>
+                            <?php else: ?>
+                                Ninguna
+                            <?php endif; ?>
                         </span>
                     </div>
 
                     <div class="flex gap-4">
                         <div class="flex-1 bg-white border border-slate-100 p-3 rounded-xl text-center">
                             <span class="text-[8px] font-black text-slate-400 uppercase block">Opcional</span>
-                            <span class="text-[10px] font-black uppercase <?= $materia['es_opcional'] ? 'text-emerald-500' : 'text-slate-300' ?>">
-                                <?= $materia['es_opcional'] ? 'Sí' : 'No' ?>
+                            <span class="text-[10px] font-black uppercase <?= !empty($materia['es_opcional']) ? 'text-emerald-500' : 'text-slate-300' ?>">
+                                <?= !empty($materia['es_opcional']) ? 'Sí' : 'No' ?>
                             </span>
                         </div>
 
                         <div class="flex-1 bg-white border border-slate-100 p-3 rounded-xl text-center">
                             <span class="text-[8px] font-black text-slate-400 uppercase block">Niveles</span>
-                            <span class="text-[10px] font-black uppercase <?= $materia['maneja_niveles'] ? 'text-emerald-500' : 'text-slate-300' ?>">
-                                <?= $materia['maneja_niveles'] ? 'Sí' : 'No' ?>
+                            <span class="text-[10px] font-black uppercase <?= !empty($materia['maneja_niveles']) ? 'text-emerald-500' : 'text-slate-300' ?>">
+                                <?= !empty($materia['maneja_niveles']) ? 'Sí' : 'No' ?>
                             </span>
                         </div>
 
@@ -241,12 +257,18 @@ $subas = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <?php if($subas): ?>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <?php foreach($subas as $s): ?>
-                            <a href="?modulo=ver_subasignatura&id=<?= $s['id'] ?>"
+                            <a href="?modulo=ver_subasignatura&id=<?= (int)$s['id'] ?>"
                                class="bg-slate-900 p-4 rounded-2xl flex items-center gap-3 group hover:bg-purple-600 transition-all">
                                 <div class="w-2 h-2 rounded-full bg-purple-500 group-hover:bg-white"></div>
-                                <span class="text-[10px] font-black text-slate-300 italic group-hover:text-white transition-colors">
-                                    <?= htmlspecialchars($s['clave'] . ' - ' . $s['nombre']) ?>
-                                </span>
+                                <div>
+                                    <span class="block text-[10px] font-black text-slate-300 italic group-hover:text-white transition-colors">
+                                        <?= htmlspecialchars($s['clave'] . ' - ' . $s['nombre']) ?>
+                                    </span>
+                                    <span class="block text-[8px] text-slate-500 group-hover:text-purple-100 font-bold uppercase mt-1">
+                                        <?= htmlspecialchars($s['recurso'] ?? 'Módulo') ?> ·
+                                        <?= (int)$s['creditos'] ?> créditos
+                                    </span>
+                                </div>
                             </a>
                         <?php endforeach; ?>
                     </div>

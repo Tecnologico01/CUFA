@@ -3,25 +3,29 @@
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/permisos.php';
 
-header('Content-Type: application/json');
-
-if(session_status() === PHP_SESSION_NONE){
-    session_start();
-}
+header('Content-Type: application/json; charset=utf-8');
 
 /* =========================
-VALIDAR PERISO
+   VALIDAR PERMISO
 ========================= */
 
-if(!tienePermiso('gestionar_asignaturas')){
+if(
+    !tienePermiso('ver_asignaturas') &&
+    !tienePermiso('editar_mallas') &&
+    !tienePermiso('crear_mallas')
+){
+    http_response_code(403);
+
     echo json_encode([
-        'error' => 'Sin permisos'
+        'success' => false,
+        'mensaje' => 'No tiene permisos para consultar asignaturas.'
     ]);
+
     exit;
 }
 
 /* =========================
-OBTENER DATOS
+   OBTENER PARÁMETROS
 ========================= */
 
 $carrera_id = isset($_GET['carrera'])
@@ -33,41 +37,63 @@ $grado = isset($_GET['periodo'])
     : 0;
 
 /* =========================
-VALIDAR
+   VALIDAR PARÁMETROS
 ========================= */
 
 if($carrera_id <= 0 || $grado <= 0){
 
-    echo json_encode([]);
+    echo json_encode([
+        'success' => true,
+        'total' => 0,
+        'data' => []
+    ]);
+
     exit;
 }
 
 /* =========================
-CONSULTAR MATERIAS
+   CONSULTAR MATERIAS
 ========================= */
 
-$stmt = $pdo->prepare("
-    SELECT
-        id,
-        clave,
-        nombre,
-        creditos,
-        tipo
-    FROM materias
-    WHERE carrera_id = ?
-    AND grado = ?
-    ORDER BY nombre ASC
-");
+try{
 
-$stmt->execute([
-    $carrera_id,
-    $grado
-]);
+    $stmt = $pdo->prepare("
+        SELECT
+            id,
+            clave,
+            nombre,
+            nombre_corto,
+            creditos,
+            tipo,
+            grado,
+            area_formacion,
+            es_opcional
+        FROM materias
+        WHERE carrera_id = ?
+        AND grado = ?
+        ORDER BY nombre ASC
+    ");
 
-$materias = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmt->execute([
+        $carrera_id,
+        $grado
+    ]);
 
-/* =========================
-RESPUESTA JSON
-========================= */
+    $materias = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-echo json_encode($materias);
+    echo json_encode([
+        'success' => true,
+        'total' => count($materias),
+        'data' => $materias
+    ]);
+
+}catch(PDOException $e){
+
+    http_response_code(500);
+
+    echo json_encode([
+        'success' => false,
+        'mensaje' => 'Error al obtener las materias.',
+        'error' => $e->getMessage()
+    ]);
+}

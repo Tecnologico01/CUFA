@@ -1,10 +1,16 @@
 <?php
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/permisos.php';
 
-$id = $_GET['id'] ?? null;
+if(!tienePermiso('editar_asignaturas')){
+    echo "<div class='p-6 text-red-600 font-bold'>Acceso denegado</div>";
+    exit;
+}
+
+$id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 
 if(!$id){
-    echo "Materia no especificada";
+    echo "<div class='p-6 text-red-600 font-bold'>Materia no especificada</div>";
     exit;
 }
 
@@ -13,15 +19,15 @@ if(!$id){
 ========================= */
 $stmt = $pdo->prepare("SELECT * FROM materias WHERE id = ?");
 $stmt->execute([$id]);
-$materia = $stmt->fetch();
+$materia = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if(!$materia){
-    echo "Materia no encontrada";
+    echo "<div class='p-6 text-red-600 font-bold'>Materia no encontrada</div>";
     exit;
 }
 
 /* =========================
-   CARRERAS LOCALES
+   CARRERAS
 ========================= */
 $carreras = $pdo->query("
     SELECT id, nombre
@@ -29,89 +35,203 @@ $carreras = $pdo->query("
     ORDER BY nombre ASC
 ")->fetchAll(PDO::FETCH_ASSOC);
 
-$mapCarreras = [];
-
-foreach($carreras as $c){
-    $mapCarreras[$c['id']] = $c['nombre'];
-}
-
-$todas_materias = $pdo->query("SELECT id, nombre, clave FROM materias ORDER BY nombre ASC")->fetchAll();
-
-/* SUBASIGNATURAS ACTUALES */
-$stmt = $pdo->prepare("
-SELECT s.id, s.nombre
-FROM materia_subasignatura ms
-JOIN subasignaturas s ON s.id = ms.subasignatura_id
-WHERE ms.materia_id = ?
-");
-$stmt->execute([$id]);
-$subas_asignadas = $stmt->fetchAll();
+/* =========================
+   TODAS LAS MATERIAS
+========================= */
+$todas_materias = $pdo->query("
+    SELECT id, nombre, clave
+    FROM materias
+    ORDER BY nombre ASC
+")->fetchAll(PDO::FETCH_ASSOC);
 
 /* =========================
-   ACTUALIZAR (Lógica intacta)
+   SUBASIGNATURAS ACTUALES
+========================= */
+$stmt = $pdo->prepare("
+    SELECT 
+        s.id,
+        s.nombre
+    FROM materia_subasignatura ms
+    INNER JOIN subasignaturas s
+        ON s.id = ms.subasignatura_id
+    WHERE ms.materia_id = ?
+    ORDER BY s.nombre ASC
+");
+$stmt->execute([$id]);
+
+$subas_asignadas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+/* =========================
+   ACTUALIZAR
 ========================= */
 if($_SERVER['REQUEST_METHOD'] === 'POST'){
-    if(empty($_POST['carrera_id']) || empty($_POST['grado']) || empty($_POST['clave']) || empty($_POST['nombre']) || empty($_POST['total_unidades'])){
+
+    $carrera_id = (int) ($_POST['carrera_id'] ?? 0);
+    $grado = (int) ($_POST['grado'] ?? 0);
+
+    $clave = strtoupper(trim($_POST['clave'] ?? ''));
+    $nombre = trim($_POST['nombre'] ?? '');
+    $nombre_corto = trim($_POST['nombre_corto'] ?? '');
+
+    $aula = trim($_POST['aula'] ?? '');
+
+    $creditos = is_numeric($_POST['creditos'] ?? null)
+        ? (int) $_POST['creditos']
+        : 0;
+
+    $tipo = trim($_POST['tipo_modalidad'] ?? 'Presencial');
+
+    $seriacion_id = !empty($_POST['seriacion_id'])
+        ? (int) $_POST['seriacion_id']
+        : null;
+
+    $es_opcional = isset($_POST['es_opcional'])
+        ? (int) $_POST['es_opcional']
+        : 0;
+
+    $maneja_niveles = isset($_POST['maneja_niveles'])
+        ? (int) $_POST['maneja_niveles']
+        : 0;
+
+    $area_formacion = trim($_POST['area_formacion'] ?? '');
+
+    $horas_docente = is_numeric($_POST['horas_docente'] ?? null)
+        ? (int) $_POST['horas_docente']
+        : 0;
+
+    $horas_independientes = is_numeric($_POST['horas_independientes'] ?? null)
+        ? (int) $_POST['horas_independientes']
+        : 0;
+
+    $total_unidades = is_numeric($_POST['total_unidades'] ?? null)
+        ? (int) $_POST['total_unidades']
+        : 0;
+
+    $maneja_subas = isset($_POST['maneja_subas'])
+        ? (int) $_POST['maneja_subas']
+        : 0;
+
+    if(
+        !$carrera_id ||
+        !$grado ||
+        !$clave ||
+        !$nombre ||
+        !$total_unidades
+    ){
         echo "<script>alert('Faltan datos obligatorios');</script>";
-        return;
-    }
+    }else{
 
-    $pdo->beginTransaction();
-    try{
-        $stmt = $pdo->prepare("
-        UPDATE materias SET
-            carrera_id = ?,
-            grado = ?,
-            clave = ?,
-            nombre = ?,
-            nombre_corto = ?,
-            aula = ?,
-            creditos = ?,
-            tipo = ?,
-            seriacion_id = ?,
-            es_opcional = ?,
-            maneja_niveles = ?,
-            area_formacion = ?,
-            horas_docente = ?,
-            horas_independientes = ?,
-            total_unidades = ?
-        WHERE id = ?
-        ");
+        try{
 
-        $stmt->execute([
-            $_POST['carrera_id'],
-            $_POST['grado'],
-            $_POST['clave'],
-            $_POST['nombre'],
-            $_POST['nombre_corto'],
-            $_POST['aula'],
-            $_POST['creditos'],
-            $_POST['tipo_modalidad'],
-            $_POST['seriacion_id'] ?: null,
-            $_POST['es_opcional'],
-            $_POST['maneja_niveles'],
-            $_POST['area_formacion'],
-            $_POST['horas_docente'],
-            $_POST['horas_independientes'],
-            $_POST['total_unidades'],
-            $id
-        ]);
+            $pdo->beginTransaction();
 
-        $pdo->prepare("DELETE FROM materia_subasignatura WHERE materia_id=?")->execute([$id]);
+            /* =========================
+               VALIDAR CLAVE DUPLICADA
+            ========================= */
+            $stmtDup = $pdo->prepare("
+                SELECT COUNT(*)
+                FROM materias
+                WHERE clave = ?
+                AND id != ?
+            ");
 
-        if(!empty($_POST['maneja_subas']) && !empty($_POST['subasignaturas_ids'])){
-            $stmtSub = $pdo->prepare("INSERT INTO materia_subasignatura (materia_id, subasignatura_id) VALUES (?,?)");
-            foreach(array_unique($_POST['subasignaturas_ids']) as $sub){
-                $stmtSub->execute([$id, $sub]);
+            $stmtDup->execute([$clave, $id]);
+
+            if($stmtDup->fetchColumn() > 0){
+
+                throw new Exception("Ya existe otra asignatura con esa clave");
+
             }
-        }
 
-        $pdo->commit();
-        echo "<script>alert('Materia actualizada correctamente'); window.location.href='/sistema_academico/dashboards/admin_dashboard.php?modulo=editar_materia&id=$id';</script>";
-        exit;
-    }catch(Exception $e){
-        $pdo->rollBack();
-        echo "<script>alert('Error al actualizar');</script>";
+            /* =========================
+               ACTUALIZAR MATERIA
+            ========================= */
+            $stmt = $pdo->prepare("
+                UPDATE materias SET
+                    carrera_id = ?,
+                    grado = ?,
+                    clave = ?,
+                    nombre = ?,
+                    nombre_corto = ?,
+                    aula = ?,
+                    creditos = ?,
+                    tipo = ?,
+                    seriacion_id = ?,
+                    es_opcional = ?,
+                    maneja_niveles = ?,
+                    area_formacion = ?,
+                    horas_docente = ?,
+                    horas_independientes = ?,
+                    total_unidades = ?
+                WHERE id = ?
+            ");
+
+            $stmt->execute([
+                $carrera_id,
+                $grado,
+                $clave,
+                $nombre,
+                $nombre_corto,
+                $aula,
+                $creditos,
+                $tipo,
+                $seriacion_id,
+                $es_opcional,
+                $maneja_niveles,
+                $area_formacion,
+                $horas_docente,
+                $horas_independientes,
+                $total_unidades,
+                $id
+            ]);
+
+            /* =========================
+               LIMPIAR RELACIONES
+            ========================= */
+            $pdo->prepare("
+                DELETE FROM materia_subasignatura
+                WHERE materia_id = ?
+            ")->execute([$id]);
+
+            /* =========================
+               REINSERTAR SUBASIGNATURAS
+            ========================= */
+            if(
+                $maneja_subas &&
+                !empty($_POST['subasignaturas_ids'])
+            ){
+
+                $stmtSub = $pdo->prepare("
+                    INSERT INTO materia_subasignatura
+                    (materia_id, subasignatura_id)
+                    VALUES (?,?)
+                ");
+
+                foreach(array_unique($_POST['subasignaturas_ids']) as $subId){
+
+                    $stmtSub->execute([
+                        $id,
+                        (int) $subId
+                    ]);
+                }
+            }
+
+            $pdo->commit();
+
+            echo "<script>
+                alert('Materia actualizada correctamente');
+                window.location.href='/sistema_academico/dashboards/admin_dashboard.php?modulo=editar_materia&id={$id}';
+            </script>";
+            exit;
+
+        }catch(Exception $e){
+
+            $pdo->rollBack();
+
+            echo "<script>
+                alert('".$e->getMessage()."');
+            </script>";
+        }
     }
 }
 ?>
@@ -120,16 +240,40 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
 
     <!-- CABECERA -->
     <div class="flex flex-col md:flex-row justify-between items-start mb-10 gap-4">
+
         <div class="flex items-center gap-6">
+
             <a href="/sistema_academico/dashboards/admin_dashboard.php?modulo=lista_asignaturas"
                class="group bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-slate-400 hover:text-purple-600 hover:border-purple-200 transition-all">
-               <svg class="w-6 h-6 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10 19l-7-7m0 0l7-7m-7 7h18" stroke-width="3"></path></svg>
+
+               <svg class="w-6 h-6 transition-transform group-hover:-translate-x-1"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24">
+
+                    <path d="M10 19l-7-7m0 0l7-7m-7 7h18"
+                          stroke-width="3">
+                    </path>
+
+               </svg>
             </a>
+
             <div>
-                <h1 class="text-4xl font-black text-slate-800 uppercase italic tracking-tighter leading-none">Editar Asignatura</h1>
+
+                <h1 class="text-4xl font-black text-slate-800 uppercase italic tracking-tighter leading-none">
+                    Editar Asignatura
+                </h1>
+
                 <div class="flex items-center gap-2 mt-2">
-                    <span class="px-2 py-0.5 bg-purple-100 text-purple-700 text-[10px] font-black rounded-lg uppercase italic border border-purple-200">Panel de Control</span>
-                    <p class="text-xs text-slate-400 font-bold uppercase tracking-widest"><?= $materia['clave'] ?></p>
+
+                    <span class="px-2 py-0.5 bg-purple-100 text-purple-700 text-[10px] font-black rounded-lg uppercase italic border border-purple-200">
+                        Panel de Control
+                    </span>
+
+                    <p class="text-xs text-slate-400 font-bold uppercase tracking-widest">
+                        <?= htmlspecialchars($materia['clave']) ?>
+                    </p>
+
                 </div>
             </div>
         </div>

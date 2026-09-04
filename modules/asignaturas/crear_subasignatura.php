@@ -3,10 +3,7 @@
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/permisos.php';
 
-if(!tienePermiso('crear_asignaturas')){
-    echo "<div class='p-6 text-red-600 font-bold'>Acceso denegado</div>";
-    exit;
-}
+validarPermiso('crear_subasignaturas');
 
 $error = '';
 $mensaje = '';
@@ -74,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             echo "<script>
                 alert('Subasignatura registrada correctamente');
-                window.location.href='/sistema_academico/dashboards/dashboard.php?modulo=lista_subasignaturas';
+                window.location.href='?modulo=lista_subasignaturas';
             </script>";
             exit;
 

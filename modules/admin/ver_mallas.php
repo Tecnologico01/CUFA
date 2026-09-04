@@ -1,5 +1,8 @@
 <?php
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/permisos.php';
+
+validarPermiso('ver_mallas');
 
 /*
 |--------------------------------------------------------------------------
@@ -23,7 +26,9 @@ $carreras = $stmtCarreras->fetchAll(PDO::FETCH_ASSOC);
 |--------------------------------------------------------------------------
 */
 
-$carrera_id = $_GET['carrera_id'] ?? null;
+$carrera_id = isset($_GET['carrera_id'])    
+    ? (int) $_GET['carrera_id']
+    : 0;
 
 $materias = [];
 
@@ -47,6 +52,10 @@ if($carrera_id){
 
     $carrera_nombre = $stmtCarrera->fetchColumn();
 
+    if(!$carrera_nombre){
+        $carrera_id = 0;
+    }
+
     /*
     |--------------------------------------------------------------------------
     | OBTENER MATERIAS
@@ -62,6 +71,8 @@ if($carrera_id){
             m.creditos,
             m.tipo,
             m.seriacion_id,
+            m.es_opcional,
+            m.area_formacion,
 
             s.nombre AS seriacion_nombre
 
@@ -212,7 +223,8 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    pointer-events: none; /* Permite clickear lo que está debajo */
+    overflow: visible;
+    pointer-events: none;
     z-index: 10;
 }
 
@@ -314,7 +326,7 @@ body {
                                     <?php if(isset($grados[$g])): ?>
                                         <?php foreach($grados[$g] as $m): ?>
                                             
-                                            <div class="materia-card" 
+                                            <div class="materia-card relative"
                                                  id="materia-<?= $m['id'] ?>" 
                                                  <?= $m['seriacion_id'] ? 'data-requiere="'.$m['seriacion_id'].'"' : '' ?>>
                                                 
@@ -331,8 +343,18 @@ body {
                                                     <?= htmlspecialchars($m['nombre']) ?>
                                                 </h3>
 
-                                                <div class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-3">
-                                                    Tipo: <?= htmlspecialchars($m['tipo']) ?>
+                                                <div class="flex flex-wrap gap-2 mt-3">
+
+                                                    <span class="bg-slate-100 text-slate-500 text-[8px] px-2 py-1 rounded-lg font-black uppercase tracking-wider">
+                                                        <?= htmlspecialchars($m['area_formacion']) ?>
+                                                    </span>
+
+                                                    <?php if($m['es_opcional']): ?>
+                                                        <span class="bg-amber-100 text-amber-700 text-[8px] px-2 py-1 rounded-lg font-black uppercase tracking-wider">
+                                                            Opcional
+                                                        </span>
+                                                    <?php endif; ?>
+
                                                 </div>
 
                                                 <?php if($m['seriacion_id']): ?>
@@ -400,68 +422,158 @@ body {
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    
+
+    const svg = document.getElementById('svg-connections');
+    const container = document.getElementById('malla-container');
+
+    if (!svg || !container) return;
+
     function drawSeriacionLines() {
-        const svg = document.getElementById('svg-connections');
-        const container = document.getElementById('malla-container');
-        
-        if (!svg || !container) return;
-        
-        // Limpiar lienzo e inyectar definición de la punta de flecha
+
         svg.innerHTML = `
             <defs>
-                <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-                    <polygon points="0 0, 8 3, 0 6" fill="#a855f7" />
+                <marker
+                    id="arrowhead"
+                    markerWidth="10"
+                    markerHeight="8"
+                    refX="8"
+                    refY="4"
+                    orient="auto"
+                >
+                    <polygon
+                        points="0 0, 10 4, 0 8"
+                        fill="#a855f7"
+                    />
                 </marker>
             </defs>
         `;
 
-        const materiasConSeriacion = document.querySelectorAll('.materia-card[data-requiere]');
+        const width = container.scrollWidth;
+        const height = container.scrollHeight;
+
+        svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+        svg.setAttribute('width', width);
+        svg.setAttribute('height', height);
+
+        const materias = document.querySelectorAll(
+            '.materia-card[data-requiere]'
+        );
+
         const containerRect = container.getBoundingClientRect();
 
-        materiasConSeriacion.forEach(materia => {
-            const reqId = materia.getAttribute('data-requiere');
-            const objetivo = document.getElementById('materia-' + reqId);
-            
-            if (objetivo) {
-                const matRect = materia.getBoundingClientRect();
-                const objRect = objetivo.getBoundingClientRect();
+        materias.forEach(materia => {
 
-                // Calcular coordenadas relativas al contenedor de la malla
-                const startX = (objRect.right - containerRect.left);
-                const startY = (objRect.top - containerRect.top) + (objRect.height / 2);
-                
-                const endX = (matRect.left - containerRect.left);
-                const endY = (matRect.top - containerRect.top) + (matRect.height / 2);
+            const reqId = materia.dataset.requiere;
 
-                // Calcular puntos de control para la curva de bezier
-                const distanceX = Math.abs(endX - startX);
-                const cp1X = startX + (distanceX * 0.4);
-                const cp2X = endX - (distanceX * 0.4);
+            if (!reqId) return;
 
-                // Crear el elemento path (línea SVG)
-                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                path.setAttribute('d', \`M \${startX} \${startY} C \${cp1X} \${startY}, \${cp2X} \${endY}, \${endX} \${endY}\`);
-                path.setAttribute('fill', 'none');
-                path.setAttribute('stroke', '#a855f7'); // Color purple-500
-                path.setAttribute('stroke-width', '2.5');
-                path.setAttribute('stroke-dasharray', '6,6'); // Línea punteada
-                path.setAttribute('marker-end', 'url(#arrowhead)');
-                path.setAttribute('class', 'seriacion-line');
-                // Atributo extra para calcular la animación
-                path.setAttribute('stroke-dashoffset', '1000'); 
+            const origen = document.getElementById(
+                `materia-${reqId}`
+            );
 
-                svg.appendChild(path);
-            }
+            if (!origen) return;
+
+            const origenRect = origen.getBoundingClientRect();
+            const destinoRect = materia.getBoundingClientRect();
+
+            const startX =
+                (origenRect.right - containerRect.left)
+                + container.scrollLeft;
+
+            const startY =
+                (origenRect.top - containerRect.top)
+                + (origenRect.height / 2)
+                + container.scrollTop;
+
+            const endX =
+                (destinoRect.left - containerRect.left)
+                + container.scrollLeft;
+
+            const endY =
+                (destinoRect.top - containerRect.top)
+                + (destinoRect.height / 2)
+                + container.scrollTop;
+
+            const distanceX = Math.abs(endX - startX);
+
+            const cp1X = startX + (distanceX * 0.45);
+            const cp2X = endX - (distanceX * 0.45);
+
+            const d = `
+                M ${startX} ${startY}
+                C ${cp1X} ${startY},
+                  ${cp2X} ${endY},
+                  ${endX} ${endY}
+            `;
+
+            const path = document.createElementNS(
+                'http://www.w3.org/2000/svg',
+                'path'
+            );
+
+            path.setAttribute('d', d);
+
+            path.setAttribute('fill', 'none');
+
+            path.setAttribute('stroke', '#a855f7');
+
+            path.setAttribute('stroke-width', '2.5');
+
+            path.setAttribute('stroke-linecap', 'round');
+
+            path.setAttribute('stroke-dasharray', '7 7');
+
+            path.setAttribute(
+                'marker-end',
+                'url(#arrowhead)'
+            );
+
+            path.classList.add('seriacion-line');
+
+            svg.appendChild(path);
+
+            const length = path.getTotalLength();
+
+            path.style.strokeDasharray = length;
+            path.style.strokeDashoffset = length;
+
+            requestAnimationFrame(() => {
+                path.style.transition =
+                    'stroke-dashoffset 1.2s ease';
+
+                path.style.strokeDashoffset = '0';
+            });
         });
     }
 
-    // Dibujar flechas al cargar y recalcular si se redimensiona la ventana
     drawSeriacionLines();
-    window.addEventListener('resize', drawSeriacionLines);
-    
-    // Si la fuente tarda en cargar y cambia el tamaño de las cajas, recalculamos
-    document.fonts.ready.then(drawSeriacionLines);
+
+    let resizeTimer;
+
+    window.addEventListener('resize', () => {
+
+        clearTimeout(resizeTimer);
+
+        resizeTimer = setTimeout(() => {
+            drawSeriacionLines();
+        }, 150);
+    });
+
+    const scrollContainer = container.parentElement;
+
+    if (scrollContainer) {
+
+        scrollContainer.addEventListener('scroll', () => {
+            drawSeriacionLines();
+        });
+    }
+
+    if (document.fonts && document.fonts.ready) {
+
+        document.fonts.ready.then(() => {
+            drawSeriacionLines();
+        });
+    }
 });
 </script>
 

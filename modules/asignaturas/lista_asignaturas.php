@@ -2,23 +2,12 @@
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/permisos.php';
 
-/* =========================
-   VALIDAR PERMISO PRINCIPAL
-========================= */
-
 validarPermiso('ver_asignaturas');
-
-/* =========================
-   PERMISOS DE ACCIONES
-========================= */
 
 $puedeCrear = tienePermiso('crear_asignaturas');
 $puedeEditar = tienePermiso('editar_asignaturas');
 $puedeEliminar = tienePermiso('eliminar_asignaturas');
-
-/* =========================
-   CONSULTAR ASIGNATURAS
-========================= */
+$puedeVerDetalle = tienePermiso('ver_detalle_asignatura') || tienePermiso('ver_asignaturas');
 
 $materias = $pdo->query("
     SELECT 
@@ -30,7 +19,9 @@ $materias = $pdo->query("
         COALESCE(m.tipo, 'Presencial') AS tipo,
         m.grado,
         m.creditos,
-        m.total_unidades
+        m.total_unidades,
+        m.area_formacion,
+        m.es_opcional
     FROM materias m
     LEFT JOIN carreras c 
         ON c.id = m.carrera_id
@@ -41,6 +32,9 @@ $materias = $pdo->query("
 ")->fetchAll(PDO::FETCH_ASSOC);
 
 $total_materias = count($materias);
+
+$msg = $_GET['msg'] ?? '';
+$error = $_GET['error'] ?? '';
 ?>
 
 <div class="max-w-7xl mx-auto p-6 bg-slate-50 min-h-screen animate-fade-in">
@@ -64,7 +58,7 @@ $total_materias = count($materias);
                     Total
                 </span>
                 <span id="contador-visual" class="text-2xl font-black text-purple-600">
-                    <?= $total_materias ?>
+                    <?= (int)$total_materias ?>
                 </span>
             </div>
 
@@ -79,6 +73,18 @@ $total_materias = count($materias);
 
     </div>
 
+    <?php if($msg): ?>
+        <div class="bg-emerald-50 border border-emerald-200 text-emerald-700 p-5 rounded-2xl mb-8 font-bold">
+            <?= htmlspecialchars($msg === 'eliminado' ? 'Asignatura eliminada correctamente.' : $msg) ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if($error): ?>
+        <div class="bg-red-50 border border-red-200 text-red-700 p-5 rounded-2xl mb-8 font-bold">
+            <?= htmlspecialchars($error === '1' ? 'No se pudo completar la operación.' : $error) ?>
+        </div>
+    <?php endif; ?>
+
     <div class="relative mb-12">
         <div class="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none">
             <svg class="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -88,105 +94,149 @@ $total_materias = count($materias);
 
         <input
             id="buscador"
-            placeholder="Filtrar por clave, nombre o carrera..."
+            placeholder="Filtrar por clave, nombre, carrera o área..."
             class="w-full p-6 pl-14 bg-white border border-slate-100 rounded-[2.5rem] shadow-sm font-bold text-slate-600 focus:ring-4 focus:ring-purple-500/10 outline-none transition-all placeholder:text-slate-200"
         >
     </div>
 
-    <div id="grid-materias" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+    <?php if(count($materias) > 0): ?>
 
-        <?php foreach($materias as $m): ?>
+        <div id="grid-materias" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
 
-            <div
-                class="card-materia group bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all relative overflow-hidden"
-                data-text="<?= htmlspecialchars(strtolower(trim($m['clave'] . ' ' . $m['nombre'] . ' ' . $m['nombre_corto'] . ' ' . $m['carrera']))) ?>"
-            >
+            <?php foreach($materias as $m): ?>
 
-                <div class="absolute top-0 right-0 p-6 select-none opacity-[0.03] group-hover:opacity-10 transition-opacity">
-                    <span class="text-4xl font-black italic uppercase leading-none">
-                        <?= htmlspecialchars($m['tipo']) ?>
-                    </span>
-                </div>
+                <div
+                    class="card-materia group bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all relative overflow-hidden"
+                    data-text="<?= htmlspecialchars(strtolower(trim(
+                        ($m['clave'] ?? '') . ' ' .
+                        ($m['nombre'] ?? '') . ' ' .
+                        ($m['nombre_corto'] ?? '') . ' ' .
+                        ($m['carrera'] ?? '') . ' ' .
+                        ($m['area_formacion'] ?? '')
+                    ))) ?>"
+                >
 
-                <div class="relative z-10">
-
-                    <div class="mb-4">
-                        <span class="text-[10px] font-black text-purple-600 tracking-[0.2em] italic uppercase">
-                            <?= htmlspecialchars($m['clave']) ?>
-                        </span>
-                    </div>
-
-                    <h3 class="text-xl font-black text-slate-800 leading-tight mb-2 group-hover:text-purple-700 transition-colors">
-                        <?= htmlspecialchars($m['nombre']) ?>
-                    </h3>
-
-                    <div class="mb-6">
-                        <label class="text-[8px] font-black text-slate-300 uppercase block mb-1">
-                            Programa
-                        </label>
-
-                        <p class="text-xs font-bold text-slate-500 italic">
-                            <?= htmlspecialchars($m['carrera']) ?>
-                        </p>
-                    </div>
-
-                    <div class="flex flex-wrap gap-2">
-
-                        <span class="inline-block text-[9px] font-black bg-purple-50 text-purple-600 px-4 py-1 rounded-full uppercase tracking-widest border border-purple-100">
+                    <div class="absolute top-0 right-0 p-6 select-none opacity-[0.03] group-hover:opacity-10 transition-opacity">
+                        <span class="text-4xl font-black italic uppercase leading-none">
                             <?= htmlspecialchars($m['tipo']) ?>
                         </span>
-
-                        <span class="inline-block text-[9px] font-black bg-blue-50 text-blue-600 px-4 py-1 rounded-full uppercase tracking-widest border border-blue-100">
-                            Grado <?= (int)$m['grado'] ?>
-                        </span>
-
-                        <span class="inline-block text-[9px] font-black bg-emerald-50 text-emerald-600 px-4 py-1 rounded-full uppercase tracking-widest border border-emerald-100">
-                            <?= (int)$m['total_unidades'] ?> Parciales
-                        </span>
-
-                        <span class="inline-block text-[9px] font-black bg-amber-50 text-amber-600 px-4 py-1 rounded-full uppercase tracking-widest border border-amber-100">
-                            <?= (int)$m['creditos'] ?> Créditos
-                        </span>
-
                     </div>
 
-                    <div class="flex flex-wrap gap-3 mt-8 pt-6 border-t border-slate-50">
+                    <div class="relative z-10">
 
-                        <a
-                            href="?modulo=ver_asignatura&id=<?= $m['id'] ?>"
-                            class="flex-1 text-center bg-slate-900 hover:bg-purple-600 text-white py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all shadow-md shadow-slate-100"
-                        >
-                            Ver
-                        </a>
+                        <div class="mb-4 flex items-center justify-between gap-3">
+                            <span class="text-[10px] font-black text-purple-600 tracking-[0.2em] italic uppercase">
+                                <?= htmlspecialchars($m['clave']) ?>
+                            </span>
 
-                        <?php if($puedeEditar): ?>
-                            <a
-                                href="?modulo=editar_materia&id=<?= $m['id'] ?>"
-                                class="flex-1 text-center bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all"
-                            >
-                                Editar
-                            </a>
+                            <?php if(!empty($m['es_opcional'])): ?>
+                                <span class="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest">
+                                    Opcional
+                                </span>
+                            <?php endif; ?>
+                        </div>
+
+                        <h3 class="text-xl font-black text-slate-800 leading-tight mb-2 group-hover:text-purple-700 transition-colors">
+                            <?= htmlspecialchars($m['nombre']) ?>
+                        </h3>
+
+                        <?php if(!empty($m['nombre_corto'])): ?>
+                            <p class="text-[10px] font-bold text-slate-400 uppercase italic mb-4">
+                                <?= htmlspecialchars($m['nombre_corto']) ?>
+                            </p>
                         <?php endif; ?>
 
-                        <?php if($puedeEliminar): ?>
-                            <button
-                                type="button"
-                                onclick="eliminarMateria(<?= $m['id'] ?>)"
-                                class="flex-1 bg-white border border-slate-100 hover:bg-red-50 hover:border-red-100 text-slate-300 hover:text-red-500 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all"
-                            >
-                                Eliminar
-                            </button>
-                        <?php endif; ?>
+                        <div class="mb-6">
+                            <label class="text-[8px] font-black text-slate-300 uppercase block mb-1">
+                                Programa
+                            </label>
+
+                            <p class="text-xs font-bold text-slate-500 italic">
+                                <?= htmlspecialchars($m['carrera']) ?>
+                            </p>
+                        </div>
+
+                        <div class="flex flex-wrap gap-2">
+
+                            <span class="inline-block text-[9px] font-black bg-purple-50 text-purple-600 px-4 py-1 rounded-full uppercase tracking-widest border border-purple-100">
+                                <?= htmlspecialchars($m['tipo']) ?>
+                            </span>
+
+                            <span class="inline-block text-[9px] font-black bg-blue-50 text-blue-600 px-4 py-1 rounded-full uppercase tracking-widest border border-blue-100">
+                                Grado <?= (int)$m['grado'] ?>
+                            </span>
+
+                            <span class="inline-block text-[9px] font-black bg-emerald-50 text-emerald-600 px-4 py-1 rounded-full uppercase tracking-widest border border-emerald-100">
+                                <?= (int)$m['total_unidades'] ?> Parciales
+                            </span>
+
+                            <span class="inline-block text-[9px] font-black bg-amber-50 text-amber-600 px-4 py-1 rounded-full uppercase tracking-widest border border-amber-100">
+                                <?= (int)$m['creditos'] ?> Créditos
+                            </span>
+
+                            <?php if(!empty($m['area_formacion'])): ?>
+                                <span class="inline-block text-[9px] font-black bg-slate-100 text-slate-500 px-4 py-1 rounded-full uppercase tracking-widest border border-slate-200">
+                                    <?= htmlspecialchars($m['area_formacion']) ?>
+                                </span>
+                            <?php endif; ?>
+
+                        </div>
+
+                        <div class="flex flex-wrap gap-3 mt-8 pt-6 border-t border-slate-50">
+
+                            <?php if($puedeVerDetalle): ?>
+                                <a
+                                    href="?modulo=ver_asignatura&id=<?= (int)$m['id'] ?>"
+                                    class="flex-1 text-center bg-slate-900 hover:bg-purple-600 text-white py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all shadow-md shadow-slate-100"
+                                >
+                                    Ver
+                                </a>
+                            <?php endif; ?>
+
+                            <?php if($puedeEditar): ?>
+                                <a
+                                    href="?modulo=editar_materia&id=<?= (int)$m['id'] ?>"
+                                    class="flex-1 text-center bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all"
+                                >
+                                    Editar
+                                </a>
+                            <?php endif; ?>
+
+                            <?php if($puedeEliminar): ?>
+                                <button
+                                    type="button"
+                                    onclick="eliminarMateria(<?= (int)$m['id'] ?>)"
+                                    class="flex-1 bg-white border border-slate-100 hover:bg-red-50 hover:border-red-100 text-slate-300 hover:text-red-500 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all"
+                                >
+                                    Eliminar
+                                </button>
+                            <?php endif; ?>
+
+                        </div>
 
                     </div>
 
                 </div>
 
-            </div>
+            <?php endforeach; ?>
 
-        <?php endforeach; ?>
+        </div>
 
-    </div>
+    <?php else: ?>
+
+        <div class="bg-white rounded-[2.5rem] border border-slate-100 p-16 text-center shadow-sm">
+            <div class="text-6xl mb-4">📚</div>
+
+            <h2 class="text-2xl font-black text-slate-800 uppercase mb-3">
+                Sin asignaturas registradas
+            </h2>
+
+            <p class="text-slate-400 font-bold">
+                Aún no existen asignaturas en el sistema.
+            </p>
+        </div>
+
+    <?php endif; ?>
 
     <div id="no-results" class="hidden py-32 text-center">
         <div class="inline-block p-6 bg-slate-100 rounded-full mb-4">
@@ -203,30 +253,39 @@ $total_materias = count($materias);
 </div>
 
 <script>
-document.getElementById("buscador").addEventListener("keyup", function(){
+const buscadorAsignaturas = document.getElementById("buscador");
 
-    let filtro = this.value.toLowerCase().trim();
-    let cards = document.querySelectorAll(".card-materia");
-    let visible = 0;
+if(buscadorAsignaturas){
+    buscadorAsignaturas.addEventListener("keyup", function(){
 
-    cards.forEach(card => {
+        const filtro = this.value.toLowerCase().trim();
+        const cards = document.querySelectorAll(".card-materia");
+        let visible = 0;
 
-        if(card.dataset.text.includes(filtro)){
+        cards.forEach(card => {
 
-            card.style.display = "block";
-            visible++;
+            const texto = card.dataset.text || "";
 
-        }else{
+            if(texto.includes(filtro)){
+                card.style.display = "block";
+                visible++;
+            }else{
+                card.style.display = "none";
+            }
+        });
 
-            card.style.display = "none";
+        const contador = document.getElementById("contador-visual");
+        const noResults = document.getElementById("no-results");
+
+        if(contador){
+            contador.innerText = visible;
+        }
+
+        if(noResults){
+            noResults.style.display = visible ? "none" : "block";
         }
     });
-
-    document.getElementById("contador-visual").innerText = visible;
-
-    document.getElementById("no-results").style.display =
-        visible ? "none" : "block";
-});
+}
 
 function eliminarMateria(id){
 
@@ -234,8 +293,7 @@ function eliminarMateria(id){
         return;
     }
 
-    window.location.href =
-        "?modulo=eliminar_materia&id=" + id;
+    window.location.href = "?modulo=eliminar_materia&id=" + id;
 }
 </script>
 

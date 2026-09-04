@@ -1,27 +1,73 @@
 <?php
 
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/permisos.php';
 
 header('Content-Type: application/json');
 
-$carrera=$_GET['carrera'] ?? null;
-$periodo=$_GET['periodo'] ?? null;
-
-if(!$carrera || !$periodo){
-echo json_encode([]);
-exit;
+if(session_status() === PHP_SESSION_NONE){
+    session_start();
 }
 
-$stmt=$pdo->prepare("
-SELECT m.id,m.nombre
-FROM malla_materias mm
-JOIN materias m ON m.id=mm.materia_id
-JOIN mallas_curriculares mc ON mc.id=mm.malla_id
-WHERE mc.carrera_id=?
-AND mm.periodo_numero=?
-ORDER BY m.nombre
+/* =========================
+VALIDAR PERISO
+========================= */
+
+if(!tienePermiso('ver_asignaturas')){
+    echo json_encode([
+        'error' => 'Sin permisos'
+    ]);
+    exit;
+}
+
+/* =========================
+OBTENER DATOS
+========================= */
+
+$carrera_id = isset($_GET['carrera'])
+    ? (int) $_GET['carrera']
+    : 0;
+
+$grado = isset($_GET['periodo'])
+    ? (int) $_GET['periodo']
+    : 0;
+
+/* =========================
+VALIDAR
+========================= */
+
+if($carrera_id <= 0 || $grado <= 0){
+
+    echo json_encode([]);
+    exit;
+}
+
+/* =========================
+CONSULTAR MATERIAS
+========================= */
+
+$stmt = $pdo->prepare("
+    SELECT
+        id,
+        clave,
+        nombre,
+        creditos,
+        tipo
+    FROM materias
+    WHERE carrera_id = ?
+    AND grado = ?
+    ORDER BY nombre ASC
 ");
 
-$stmt->execute([$carrera,$periodo]);
+$stmt->execute([
+    $carrera_id,
+    $grado
+]);
 
-echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
+$materias = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+/* =========================
+RESPUESTA JSON
+========================= */
+
+echo json_encode($materias);

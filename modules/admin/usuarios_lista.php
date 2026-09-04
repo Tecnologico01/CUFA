@@ -1,5 +1,10 @@
 <?php
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/permisos.php';
+
+if(!tienePermiso('ver_usuarios')){
+    die("Sin permisos");
+}
 
 /*
 |--------------------------------------------------------------------------
