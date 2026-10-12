@@ -174,8 +174,9 @@ try{
     |--------------------------------------------------------------------------
     */
 
-    header("Location: ../dashboards/admin_dashboard.php?modulo=usuarios_lista");
-
+    echo "<script>
+        window.location.href='dashboard.php?modulo=usuarios_lista&actualizado=1';
+    </script>";
     exit;
 
 }catch(PDOException $e){

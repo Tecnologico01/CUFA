@@ -1,23 +1,16 @@
 <?php
 require_once __DIR__ . '/../../includes/db.php';
-require_once __DIR__ . '/../../includes/permisos.php';
+require_once __DIR__ . '/../../includes/planeaciones_service.php';
 
 validarPermiso('ver_planeaciones');
 
-$puedeEditar = tienePermiso('editar_planeaciones') || tienePermiso('crear_planeaciones');
+$puedeEditar = ($_SESSION['rol_slug'] ?? '') === 'docente' && (tienePermiso('editar_planeaciones') || tienePermiso('crear_planeaciones'));
 
 $asignacion_id = isset($_GET['asignacion_id'])
     ? (int) $_GET['asignacion_id']
     : (isset($_GET['asignacion']) ? (int) $_GET['asignacion'] : 0);
 
-if($asignacion_id <= 0){
-    echo "
-    <div class='bg-red-50 border border-red-200 text-red-700 p-6 rounded-2xl font-bold'>
-        Asignación no especificada.
-    </div>";
-    exit;
-}
-
+if($asignacion_id <= 0){ require __DIR__.'/listado_planeaciones.php'; return; }
 /* =========================
    OBTENER DATOS DE MATERIA
 ========================= */
@@ -86,7 +79,9 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['guardar'])){
 
     try{
 
+        cufaValidarToken();
         $pdo->beginTransaction();
+        cufaEditarPlan($pdo,'temas_materia',$tema_id,$asignacion_id);
 
         /* Validar que el tema pertenezca a la asignación */
         $stmtTema = $pdo->prepare("
@@ -113,6 +108,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['guardar'])){
         $planeacionExistente = $check->fetch(PDO::FETCH_ASSOC);
 
         if($planeacionExistente){
+            cufaEditarPlan($pdo,'planeacion_docente',(int)$planeacionExistente['id'],$asignacion_id);
 
             $stmt = $pdo->prepare("
                 UPDATE planeacion_docente
@@ -159,6 +155,8 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['guardar'])){
             ]);
         }
 
+        $registro_id = $planeacionExistente ? (int)$planeacionExistente['id'] : (int)$pdo->lastInsertId();
+        cufaRegistroRevision($pdo,'planeacion_docente',$registro_id,'pendiente','Corrección guardada por el docente.',(int)$_SESSION['user_id']);
         $pdo->commit();
 
         echo "
@@ -199,6 +197,7 @@ $stmt = $pdo->prepare("
         t.descripcion,
         t.estado,
         t.nombre_unidad,
+        p.id planeacion_id,
         p.subtemas,
         p.actividades_aprendizaje,
         p.actividades_ensenanza,
@@ -377,7 +376,8 @@ $temas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             <form method="POST" class="space-y-5">
 
-                <input type="hidden" name="tema_id" value="<?= (int)$t['id'] ?>">
+                <?= cufaCampoToken() ?>
+<input type="hidden" name="tema_id" value="<?= (int)$t['id'] ?>">
 
                 <div>
                     <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -476,3 +476,4 @@ function cerrarModal(id){
     animation: slide-up 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
 </style>
+<?php foreach(cufaPlanes($pdo,['asignacion_id'=>$asignacion_id]) as $revision): if($revision['origen']==='planeacion_docente'): ?><div class="bg-white rounded-2xl p-4 mt-3"><strong><?= cufaEsc($revision['tema']) ?> — <?= cufaEsc($revision['estado']) ?></strong><p><?= cufaEsc($revision['observaciones']) ?></p><a href="<?= cufaEsc(cufaPanel('detalle_planeacion',['origen'=>$revision['origen'],'id'=>$revision['id']])) ?>">Consultar revisión</a></div><?php endif; endforeach; ?>

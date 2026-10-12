@@ -70,7 +70,7 @@ $stmt = $pdo->prepare("
         ps.material_url,
         ps.actividad_nombre,
         ps.actividad_descripcion,
-        ps.rubrica,
+        ps.rubrica_archivo AS rubrica,
         ps.fecha_apertura,
         ps.fecha_cierre,
         tm.parcial,

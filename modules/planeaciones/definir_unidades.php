@@ -1,7 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../../includes/db.php';
-require_once __DIR__ . '/../../includes/permisos.php';
+require_once __DIR__ . '/../../includes/planeaciones_service.php';
 
 validarPermiso('definir_unidades');
 
@@ -243,7 +243,9 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['guardar_unidad'])){
 
         try{
 
+            cufaValidarToken();
             $pdo->beginTransaction();
+            cufaEditarPlan($pdo,'temas_materia',0,$asignacion_id);
 
             $objetivo = trim($_POST['objetivo_unidad'] ?? '');
             $nombreUnidad = trim($_POST['nombre_unidad'] ?? '');
@@ -269,16 +271,9 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['guardar_unidad'])){
             $oldExamen = $stmtOldEx->fetchColumn();
 
             if($oldExamen){
-
-                $pdo->prepare("
-                    DELETE FROM preguntas_examen
-                    WHERE examen_id = ?
-                ")->execute([$oldExamen]);
-
-                $pdo->prepare("
-                    DELETE FROM examenes
-                    WHERE id = ?
-                ")->execute([$oldExamen]);
+                $sPreg=$pdo->prepare('SELECT pregunta,opcion_a,opcion_b,opcion_c,opcion_d,respuesta_correcta FROM preguntas_examen WHERE examen_id=? ORDER BY id');$sPreg->execute([$oldExamen]);$guardadas=$sPreg->fetchAll(PDO::FETCH_NUM);$capturadas=[];
+                for($r=1;$r<=20;$r++){if(trim($_POST["pregunta_$r"]??'')!=='')$capturadas[]=[trim($_POST["pregunta_$r"]),$_POST["a_$r"]??'',$_POST["b_$r"]??'',$_POST["c_$r"]??'',$_POST["d_$r"]??'',$_POST["correcta_$r"]??''];}
+                if($guardadas!==$capturadas)throw new RuntimeException('Se conservó el examen existente y sus preguntas. Cambiar un examen ya creado requiere un procedimiento de versionado; puedes corregir la planeación manteniendo las preguntas originales.');
             }
 
             /*
@@ -322,6 +317,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['guardar_unidad'])){
                 if($tema_existente){
 
                     $tema_id = $tema_existente['id'];
+                    cufaEditarPlan($pdo,'temas_materia',(int)$tema_id,$asignacion_id);
 
                     $stmtUpdate = $pdo->prepare("
                         UPDATE temas_materia
@@ -395,6 +391,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['guardar_unidad'])){
                     $tema_id = $pdo->lastInsertId();
                 }
 
+                cufaRegistroRevision($pdo,'temas_materia',(int)$tema_id,'revision','Unidad enviada por el docente.',(int)$_SESSION['user_id']);
                 /*
                 |--------------------------------------------------------------------------
                 | ACTIVIDAD
@@ -539,6 +536,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['guardar_unidad'])){
             |--------------------------------------------------------------------------
             */
 
+            if(!$oldExamen){
             $stmtE = $pdo->prepare("
                 INSERT INTO examenes
                 (
@@ -596,6 +594,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['guardar_unidad'])){
                 ]);
             }
 
+            }
             $pdo->commit();
 
             header("Location: ?modulo=definir_unidades&asignacion=$asignacion_id&unidad=$num_unidad&success=1");
@@ -659,7 +658,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['guardar_unidad'])){
         </div>
     <?php endif; ?>
 
-    <form method="POST" enctype="multipart/form-data" class="space-y-24">
+    <form method="POST" enctype="multipart/form-data" class="space-y-24"><?= cufaCampoToken() ?>
 
         <!-- SECCIÓN 00: DATOS MAESTROS -->
         <section class="relative">

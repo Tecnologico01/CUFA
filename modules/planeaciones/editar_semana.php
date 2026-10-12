@@ -1,7 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../../includes/db.php';
-require_once __DIR__ . '/../../includes/permisos.php';
+require_once __DIR__ . '/../../includes/planeaciones_service.php';
 
 validarPermiso('editar_planeaciones');
 
@@ -122,6 +122,9 @@ $stmt->execute([
 ]);
 
 $data = $stmt->fetch(PDO::FETCH_ASSOC);
+$temas=$pdo->prepare('SELECT id,tema FROM temas_materia WHERE asignacion_id=? ORDER BY parcial,orden,id');$temas->execute([$asignacion]);$temas=$temas->fetchAll();
+if($data){ $revision=cufaRevisionPlan($pdo,'planeacion_semanal',(int)$data['id'],$data['estado']); echo '<div class="bg-white p-4 rounded-2xl">Estado: '.cufaEsc($revision['estado']).' — '.cufaEsc($revision['observaciones']).'</div>'; }
+
 
 ?>
 
@@ -165,7 +168,10 @@ $data = $stmt->fetch(PDO::FETCH_ASSOC);
         class="bg-white rounded-[3rem] border border-slate-100 shadow-xl shadow-slate-200/40 p-10 space-y-10"
     >
 
-        <input type="hidden" name="asignacion" value="<?= $asignacion ?>">
+        <?= cufaCampoToken() ?>
+<input type="hidden" name="id" value="<?= (int)($data['id']??0) ?>">
+<label>Tema <select required name="tema_id"><option value="">Seleccionar tema</option><?php foreach($temas as $tema): ?><option value="<?= (int)$tema['id'] ?>" <?= (int)($data['tema_id']??0)===(int)$tema['id']?'selected':'' ?>><?= cufaEsc($tema['tema']) ?></option><?php endforeach; ?></select></label>
+<input type="hidden" name="asignacion" value="<?= $asignacion ?>">
         <input type="hidden" name="semana" value="<?= $semana ?>">
 
         <section>
@@ -263,9 +269,9 @@ $data = $stmt->fetch(PDO::FETCH_ASSOC);
                         class="w-full p-5 rounded-3xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
                     >
 
-                    <?php if(!empty($data['rubrica'])): ?>
+                    <?php if(!empty($data['rubrica_archivo'])): ?>
                         <a
-                            href="/sistema_academico/<?= htmlspecialchars($data['rubrica']) ?>"
+                            href="/sistema_academico/<?= htmlspecialchars($data['rubrica_archivo']) ?>"
                             target="_blank"
                             class="inline-block mt-3 text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:underline"
                         >
