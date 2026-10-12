@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/permisos.php';validarPermiso('ver_parciales');
+require_once __DIR__.'/../../includes/cufa_fase2.php';
 
 /*
 |--------------------------------------------------------------------------
@@ -235,7 +237,7 @@ body{
 
     <div class="bg-white rounded-[2rem] shadow-xl border border-slate-100 p-8 mb-10">
 
-        <form method="GET" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <form method="GET" class="grid grid-cols-1 md:grid-cols-2 gap-6"><?= cufaCampoToken() ?>
 
             <input type="hidden" name="modulo" value="parciales_anteriores">
 

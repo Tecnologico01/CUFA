@@ -1,6 +1,8 @@
 <?php
 
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/academico_service.php';
+if(($_SERVER['REQUEST_METHOD']??'GET')==='POST'){try{cufaValidarToken();}catch(Throwable $e){http_response_code(422);cufaError($e);return;}}
 
 $error = '';
 $mensaje = '';
@@ -329,7 +331,7 @@ body{
         method="POST"
         enctype="multipart/form-data"
         class="bg-white rounded-[2rem] shadow-xl border border-slate-100 p-8 space-y-8"
-    >
+    ><?= cufaCampoToken() ?>
 
         <!-- DATOS GENERALES -->
 

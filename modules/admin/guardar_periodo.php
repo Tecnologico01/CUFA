@@ -1,5 +1,8 @@
 <?php
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/permisos.php';validarPermiso('editar_periodos');
+require_once __DIR__.'/../../includes/academico_service.php';
+if(($_SERVER['REQUEST_METHOD']??'GET')==='POST'){try{cufaValidarToken();}catch(Throwable $e){http_response_code(422);cufaError($e);return;}}
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     die("Acceso no permitido");
@@ -7,8 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $id = $_POST['id'] ?? null;
 $nombre = $_POST['nombre'] ?? '';
-$fecha_inicio = $_POST['fecha_inicio'] ?? null;
-$fecha_fin = $_POST['fecha_fin'] ?? null;
+try{$fecha_inicio=cufaFecha($_POST['fecha_inicio']??'');$fecha_fin=cufaFecha($_POST['fecha_fin']??'');}catch(Throwable $e){http_response_code(422);cufaError($e);return;}
 $activo = $_POST['activo'] ?? 0;
 $tipo_periodo_id = $_POST['tipo_periodo_id'] ?? null;
 
@@ -21,6 +23,7 @@ if ($fecha_inicio > $fecha_fin) {
     die("La fecha de inicio no puede ser mayor a la fecha fin");
 }
 
+try { cufaBloquearCambioVinculado($pdo,'periodos',(int)$id,['nombre'=>$nombre,'fecha_inicio'=>$fecha_inicio,'fecha_fin'=>$fecha_fin,'tipo_periodo_id'=>$tipo_periodo_id]); } catch(Throwable $e){http_response_code(422);cufaError($e);return;}
 /* Actualizar */
 $stmt = $pdo->prepare("
     UPDATE periodos

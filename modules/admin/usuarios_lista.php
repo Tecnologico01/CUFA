@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/cufa_fase2.php';
 require_once __DIR__ . '/../../includes/permisos.php';
 
 if(!tienePermiso('ver_usuarios')){
@@ -173,7 +174,7 @@ body{
 
     <div class="bg-white rounded-[2rem] shadow-xl border border-slate-100 p-6 mb-8">
 
-        <form method="GET" action="admin_dashboard.php">
+        <form method="GET" action="admin_dashboard.php"><?= cufaCampoToken() ?>
 
             <input type="hidden" name="modulo" value="usuarios_lista">
 

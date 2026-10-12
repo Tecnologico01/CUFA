@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/permisos.php';validarPermiso('ver_periodos');
 
 /* OBTENER TIPOS DE PERIODO */
 $tipos = $pdo->query("SELECT id, nombre FROM tipos_periodo ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);

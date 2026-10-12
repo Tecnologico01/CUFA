@@ -1,10 +1,20 @@
 <?php
 require_once __DIR__ . '/../../includes/db.php';
 
-$usuario_id = $_SESSION['user_id'] ?? null;
+/*
+|--------------------------------------------------------------------------
+| VALIDAR SESIÓN
+|--------------------------------------------------------------------------
+*/
 
-if(!$usuario_id){
-    die("Sesión no válida");
+$usuario_id = (int)($_SESSION['user_id'] ?? 0);
+
+if ($usuario_id <= 0) {
+    echo "
+    <div class='bg-red-50 border border-red-200 text-red-700 p-6 rounded-3xl'>
+        Sesión no válida. Inicia sesión nuevamente.
+    </div>";
+    return;
 }
 
 /*
@@ -13,45 +23,50 @@ if(!$usuario_id){
 |--------------------------------------------------------------------------
 */
 
-$stmtAlumno = $pdo->prepare("
-    SELECT 
-        a.id AS alumno_id
+$stmt = $pdo->prepare("
+    SELECT
+        a.id AS alumno_id,
+        a.numero_control,
+        a.grado,
+        a.carrera_id,
+        u.nombres,
+        u.apellido_paterno,
+        u.apellido_materno
     FROM alumnos a
+    INNER JOIN usuarios u
+        ON u.id = a.usuario_id
     WHERE a.usuario_id = ?
     LIMIT 1
 ");
 
-$stmtAlumno->execute([$usuario_id]);
+$stmt->execute([$usuario_id]);
+$alumno = $stmt->fetch(PDO::FETCH_ASSOC);
 
-$alumno = $stmtAlumno->fetch(PDO::FETCH_ASSOC);
-
-if(!$alumno){
-
+if (!$alumno) {
     echo "
     <div class='bg-red-50 border border-red-200 text-red-700 p-6 rounded-3xl'>
         No existe un alumno vinculado a este usuario.
-    </div>
-    ";
-
-    exit;
+    </div>";
+    return;
 }
 
-$alumno_id = $alumno['alumno_id'];
+$alumno_id = (int)$alumno['alumno_id'];
 
 /*
 |--------------------------------------------------------------------------
-| OBTENER GRUPO
+| OBTENER GRUPO ACTUAL
 |--------------------------------------------------------------------------
 */
 
-$stmtGrupo = $pdo->prepare("
-    SELECT 
+$stmt = $pdo->prepare("
+    SELECT
         ga.grupo_id,
+        ga.periodo_id,
         g.nombre AS grupo
     FROM grupos_alumnos ga
 
     INNER JOIN grupos g
-        ON ga.grupo_id = g.id
+        ON g.id = ga.grupo_id
 
     WHERE ga.alumno_id = ?
 
@@ -59,124 +74,150 @@ $stmtGrupo = $pdo->prepare("
     LIMIT 1
 ");
 
-$stmtGrupo->execute([$alumno_id]);
+$stmt->execute([$alumno_id]);
+$grupo = $stmt->fetch(PDO::FETCH_ASSOC);
 
-$grupo = $stmtGrupo->fetch(PDO::FETCH_ASSOC);
-
-if(!$grupo){
-
+if (!$grupo) {
     echo "
     <div class='bg-yellow-50 border border-yellow-200 text-yellow-700 p-6 rounded-3xl'>
         No estás asignado a ningún grupo actualmente.
-    </div>
-    ";
-
-    exit;
+    </div>";
+    return;
 }
 
-$grupo_id = $grupo['grupo_id'];
+$grupo_id   = (int)$grupo['grupo_id'];
+$periodo_id = (int)($grupo['periodo_id'] ?? 0);
 
 /*
 |--------------------------------------------------------------------------
-| OBTENER MATERIAS CON EXAMEN
+| OBTENER MATERIAS CON EXÁMENES
 |--------------------------------------------------------------------------
 */
 
-$stmtMaterias = $pdo->prepare("
+$sql = "
     SELECT DISTINCT
-
-        m.id,
-        m.nombre,
-
         ad.id AS asignacion_id,
+        m.id AS materia_id,
+        m.nombre AS materia,
 
-        CONCAT(
+        CONCAT_WS(
+            ' ',
             u.nombres,
-            ' ',
             u.apellido_paterno,
-            ' ',
             u.apellido_materno
         ) AS docente,
 
-        COUNT(e.id) AS total_examenes
+        COUNT(DISTINCT e.id) AS total_examenes
 
     FROM asignaciones_docentes ad
 
     INNER JOIN materias m
-        ON ad.materia_id = m.id
+        ON m.id = ad.materia_id
 
     INNER JOIN docentes d
-        ON ad.docente_id = d.id
+        ON d.id = ad.docente_id
 
     INNER JOIN usuarios u
-        ON d.usuario_id = u.id
+        ON u.id = d.usuario_id
 
-    LEFT JOIN examenes e
+    INNER JOIN examenes e
         ON e.asignacion_id = ad.id
-        AND e.activo = 1
 
     WHERE ad.grupo_id = ?
+";
 
+$params = [$grupo_id];
+
+if ($periodo_id > 0) {
+    $sql .= " AND ad.periodo_id = ?";
+    $params[] = $periodo_id;
+}
+
+$sql .= "
     GROUP BY
+        ad.id,
         m.id,
         m.nombre,
-        docente,
-        ad.id
-
-    HAVING total_examenes > 0
+        u.nombres,
+        u.apellido_paterno,
+        u.apellido_materno
 
     ORDER BY m.nombre ASC
-");
+";
 
-$stmtMaterias->execute([$grupo_id]);
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
 
-$materias = $stmtMaterias->fetchAll(PDO::FETCH_ASSOC);
-
+$materias = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <div class="max-w-7xl mx-auto">
 
     <!-- HEADER -->
 
-    <div class="mb-14">
+    <div class="mb-12">
 
-        <div class="flex flex-col lg:flex-row justify-between gap-8">
+        <div class="flex flex-col lg:flex-row
+                    justify-between gap-8">
 
             <div>
 
-                <span class="text-[10px] uppercase tracking-[0.4em] text-purple-500 font-black">
+                <span class="text-[10px] uppercase
+                             tracking-[0.4em]
+                             text-indigo-500 font-black">
                     Portal Académico
                 </span>
 
-                <h1 class="text-5xl font-black tracking-tighter text-slate-900 mt-3">
-                    Mis <span class="text-purple-600">Exámenes</span>
+                <h1 class="text-5xl font-black
+                           tracking-tighter
+                           text-slate-900 mt-3">
+
+                    Mis
+                    <span class="text-indigo-600">
+                        Exámenes
+                    </span>
+
                 </h1>
 
-                <p class="text-slate-500 mt-5 max-w-2xl leading-relaxed">
-                    Selecciona una asignatura para presentar
-                    los exámenes configurados por tu docente.
+                <p class="text-slate-500 mt-5 max-w-2xl">
+                    Selecciona una asignatura para consultar
+                    los exámenes disponibles.
                 </p>
 
             </div>
 
-            <div class="bg-white border border-slate-200 rounded-[2rem] shadow-xl px-8 py-6 min-w-[240px]">
 
-                <p class="text-[10px] uppercase tracking-[0.3em] text-slate-400 font-black">
-                    Grupo Actual
+            <!-- GRUPO -->
+
+            <div class="bg-white border border-slate-200
+                        rounded-[2rem] shadow-xl
+                        px-8 py-6 min-w-[240px]">
+
+                <p class="text-[10px] uppercase
+                          tracking-[0.3em]
+                          text-slate-400 font-black">
+                    Grupo actual
                 </p>
 
-                <h2 class="text-3xl font-black text-purple-600 mt-3">
+                <h2 class="text-3xl font-black
+                           text-indigo-600 mt-3">
+
                     <?= htmlspecialchars($grupo['grupo']) ?>
+
                 </h2>
 
-                <div class="mt-5 border-t border-slate-100 pt-5">
+                <div class="mt-5 border-t
+                            border-slate-100 pt-5">
 
                     <p class="text-sm text-slate-500">
-                        Asignaturas con Examen
+                        Materias con examen
                     </p>
 
-                    <h3 class="text-4xl font-black text-slate-800 mt-1">
+                    <h3 class="text-4xl font-black
+                               text-slate-800 mt-1">
+
                         <?= count($materias) ?>
+
                     </h3>
 
                 </div>
@@ -187,48 +228,94 @@ $materias = $stmtMaterias->fetchAll(PDO::FETCH_ASSOC);
 
     </div>
 
-    <?php if(empty($materias)): ?>
 
-        <div class="bg-white border border-slate-200 rounded-[3rem] p-16 text-center">
+    <!-- SIN EXÁMENES -->
+
+    <?php if (!$materias): ?>
+
+        <div class="bg-white border border-slate-200
+                    rounded-[3rem] p-16 text-center">
+
+            <div class="text-6xl mb-6">
+                📝
+            </div>
 
             <h2 class="text-3xl font-black text-slate-700">
                 No hay exámenes disponibles
             </h2>
 
             <p class="text-slate-500 mt-4">
-                Tus docentes aún no han publicado exámenes.
+                Actualmente no existen exámenes publicados
+                para tus asignaturas.
             </p>
 
         </div>
 
     <?php else: ?>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-10">
 
-            <?php foreach($materias as $mat): ?>
+        <!-- MATERIAS -->
 
-                <a href="?modulo=examen&asignacion_id=<?= $mat['asignacion_id'] ?>"
-                   class="group bg-white border border-slate-200 rounded-[3rem] overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500">
+        <div class="grid grid-cols-1
+                    md:grid-cols-2
+                    xl:grid-cols-3
+                    gap-8">
 
-                    <!-- TOP -->
+            <?php foreach ($materias as $materia): ?>
 
-                    <div class="bg-gradient-to-r from-purple-500 to-fuchsia-500 p-8 text-white">
+                <a
+                    href="?modulo=examen&asignacion_id=<?= (int)$materia['asignacion_id'] ?>"
+                    class="group bg-white
+                           border border-slate-200
+                           rounded-[3rem]
+                           overflow-hidden
+                           shadow-sm
+                           hover:shadow-2xl
+                           hover:-translate-y-2
+                           transition-all
+                           duration-500"
+                >
 
-                        <div class="flex items-center justify-between">
+                    <!-- CABECERA -->
 
-                            <div class="w-20 h-20 rounded-[2rem] bg-white/15 flex items-center justify-center text-4xl backdrop-blur-sm">
+                    <div class="bg-gradient-to-r
+                                from-violet-500
+                                to-indigo-600
+                                p-8 text-white">
+
+                        <div class="flex
+                                    justify-between
+                                    items-center">
+
+                            <div class="w-20 h-20
+                                        rounded-[2rem]
+                                        bg-white/15
+                                        flex items-center
+                                        justify-center
+                                        text-4xl">
+
                                 📝
+
                             </div>
 
                             <div class="text-right">
 
-                                <p class="text-[10px] uppercase tracking-[0.3em] text-white/70 font-black">
+                                <p class="text-[10px]
+                                          uppercase
+                                          tracking-[0.3em]
+                                          text-white/70
+                                          font-black">
+
                                     Exámenes
+
                                 </p>
 
-                                <h3 class="text-4xl font-black mt-2">
-                                    <?= $mat['total_examenes'] ?>
-                                </h3>
+                                <p class="text-4xl
+                                          font-black mt-2">
+
+                                    <?= (int)$materia['total_examenes'] ?>
+
+                                </p>
 
                             </div>
 
@@ -236,34 +323,74 @@ $materias = $stmtMaterias->fetchAll(PDO::FETCH_ASSOC);
 
                     </div>
 
-                    <!-- BODY -->
+
+                    <!-- CONTENIDO -->
 
                     <div class="p-8">
 
-                        <h2 class="text-3xl font-black text-slate-800 tracking-tight leading-tight">
-                            <?= htmlspecialchars($mat['nombre']) ?>
+                        <h2 class="text-3xl
+                                   font-black
+                                   text-slate-800
+                                   tracking-tight">
+
+                            <?= htmlspecialchars($materia['materia']) ?>
+
                         </h2>
+
 
                         <div class="mt-6">
 
-                            <p class="text-[10px] uppercase tracking-[0.25em] text-slate-400 font-black mb-2">
+                            <p class="text-[10px]
+                                      uppercase
+                                      tracking-[0.25em]
+                                      text-slate-400
+                                      font-black">
+
                                 Docente
+
                             </p>
 
-                            <p class="text-slate-600 font-semibold leading-relaxed">
-                                <?= htmlspecialchars($mat['docente']) ?>
+                            <p class="text-slate-600
+                                      font-semibold mt-2">
+
+                                <?= htmlspecialchars(
+                                    trim($materia['docente'])
+                                ) ?>
+
                             </p>
 
                         </div>
 
-                        <div class="mt-8 pt-6 border-t border-slate-100 flex items-center justify-between">
 
-                            <span class="text-purple-600 font-black group-hover:translate-x-1 transition-transform">
-                                Presentar examen
+                        <div class="mt-8
+                                    pt-6
+                                    border-t
+                                    border-slate-100
+                                    flex
+                                    justify-between
+                                    items-center">
+
+                            <span class="text-indigo-600
+                                         font-black">
+
+                                Ver exámenes
+
                             </span>
 
-                            <div class="w-12 h-12 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center font-black text-xl group-hover:scale-110 transition-transform">
+                            <div class="w-12 h-12
+                                        rounded-2xl
+                                        bg-indigo-100
+                                        text-indigo-600
+                                        flex
+                                        items-center
+                                        justify-center
+                                        font-black
+                                        text-xl
+                                        group-hover:translate-x-1
+                                        transition">
+
                                 →
+
                             </div>
 
                         </div>

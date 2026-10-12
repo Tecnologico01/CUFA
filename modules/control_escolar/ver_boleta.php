@@ -1,36 +1,8 @@
 <?php
-require_once __DIR__ . '/../../includes/db.php';
-
-$id=$_GET['id'];
-
-$stmt=$pdo->prepare("
-SELECT m.nombre,c.calificacion
-FROM calificaciones c
-JOIN materias m ON c.materia_id=m.id_materia
-WHERE c.alumno_id=?
-");
-
-$stmt->execute([$id]);
-
-$materias=$stmt->fetchAll();
+require_once __DIR__.'/../../includes/db.php';require_once __DIR__.'/../../includes/reportes_cufa.php';validarPermiso('ver_boletas');
+try{$f=cufaFiltros();$id=cufaId($_GET,['id','alumno','alumno_id']);$exp=cufaExpediente($pdo,$id,$f,true);}catch(Throwable $e){cufaError($e);return;}
+$params=['id'=>$id,'grupo_id'=>$f['grupo_id'],'periodo_id'=>$f['periodo_id']];
 ?>
-
-<h1 class="text-2xl font-bold mb-6">Boleta</h1>
-
-<table class="w-full bg-white shadow rounded">
-
-<tr class="bg-purple-200">
-<th class="p-3">Materia</th>
-<th class="p-3">Calificación</th>
-</tr>
-
-<?php foreach($materias as $m){ ?>
-
-<tr class="border-t">
-<td class="p-3"><?= $m['nombre'] ?></td>
-<td class="p-3"><?= $m['calificacion'] ?></td>
-</tr>
-
-<?php } ?>
-
-</table>
+<div class="no-print flex flex-wrap gap-3 mb-6"><a href="<?= cufaEsc(cufaPanel('boletas',$f)) ?>" class="bg-slate-900 text-white p-3 rounded-xl">Volver</a><button type="button" onclick="window.print()" class="bg-purple-600 text-white p-3 rounded-xl">Imprimir vista</button><a target="_blank" href="<?= cufaEsc(cufaUrl('modules/control_escolar/pdf_boleta.php',$params)) ?>" class="bg-purple-600 text-white p-3 rounded-xl">Vista PDF tamaño carta</a><a href="<?= cufaEsc(cufaUrl('modules/control_escolar/pdf_boleta.php',array_merge($params,['descargar'=>1]))) ?>" class="bg-purple-600 text-white p-3 rounded-xl"><?= $exp['autorizada']?'Descargar boleta':'Descargar vista previa' ?></a></div>
+<div class="bg-white rounded-3xl p-8 shadow document-cufa"><?= cufaBoletaHtml($exp) ?></div>
+<style>@media print{nav,header,footer,.header-section,.no-print{display:none!important}main{padding:0!important}.document-cufa{box-shadow:none}}</style>

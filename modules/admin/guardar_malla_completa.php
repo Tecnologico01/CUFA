@@ -1,52 +1,8 @@
 <?php
-require_once __DIR__ . '/../../includes/db.php';
-
-$malla_id = $_POST['malla_id'] ?? null;
-$materias = $_POST['materias'] ?? [];
-
-if(!$malla_id){
-    die("Malla inválida");
-}
-
+require_once __DIR__.'/../../includes/db.php';require_once __DIR__.'/../../includes/academico_service.php';validarPermiso('editar_mallas');
 try{
-
-$pdo->beginTransaction();
-
-/* BORRAR MATERIAS ACTUALES */
-
-$stmt = $pdo->prepare("DELETE FROM malla_materias WHERE malla_id=?");
-$stmt->execute([$malla_id]);
-
-/* INSERTAR NUEVAS MATERIAS */
-
-$stmt = $pdo->prepare("
-INSERT INTO malla_materias
-(malla_id, materia_id, periodo_numero)
-VALUES (?,?,?)
-");
-
-foreach($materias as $periodo => $lista){
-
-    foreach($lista as $materia_id){
-
-        $stmt->execute([
-            $malla_id,
-            $materia_id,
-            $periodo
-        ]);
-
-    }
-
-}
-
-$pdo->commit();
-
-header("Location: /sistema_academico/dashboards/admin_dashboard.php?modulo=mallas_lista");
-exit;
-
-}catch(Exception $e){
-
-$pdo->rollBack();
-die("Error al guardar malla: " . $e->getMessage());
-
-}
+ if($_SERVER['REQUEST_METHOD']!=='POST')throw new RuntimeException('Utiliza el formulario para guardar la malla.');cufaValidarToken();$id=cufaId($_POST,['malla_id']);$materias=$_POST['materias']??[];if(!is_array($materias))throw new RuntimeException('Selección inválida.');
+ $pdo->beginTransaction();$s=$pdo->prepare('SELECT * FROM mallas_curriculares WHERE id=? FOR UPDATE');$s->execute([$id]);$m=$s->fetch();if(!$m)throw new RuntimeException('Malla no encontrada.');
+ foreach($materias as $periodo=>$lista){if(!ctype_digit((string)$periodo)||$periodo<1||$periodo>(int)$m['total_periodos']||!is_array($lista))throw new RuntimeException('Periodo de malla inválido.');foreach($lista as $materia){$s=$pdo->prepare('SELECT id FROM materias WHERE id=? AND carrera_id=?');$s->execute([(int)$materia,$m['carrera_id']]);if(!$s->fetchColumn())throw new RuntimeException('La materia no pertenece a la carrera de la malla.');$s=$pdo->prepare('SELECT id FROM malla_materias WHERE malla_id=? AND materia_id=? AND periodo_numero=?');$s->execute([$id,(int)$materia,(int)$periodo]);if(!$s->fetchColumn())$pdo->prepare('INSERT INTO malla_materias(malla_id,materia_id,periodo_numero) VALUES(?,?,?)')->execute([$id,(int)$materia,(int)$periodo]);}}
+ $pdo->commit();echo '<div class="bg-white rounded-3xl p-6">Materias agregadas sin duplicar relaciones. Las materias anteriores se conservaron; para sustituir un plan histórico crea una nueva malla.</div><a href="'.cufaEsc(cufaPanel('editar_malla',['id'=>$id])).'">Volver a la malla</a>';
+}catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();http_response_code(422);cufaError($e);}

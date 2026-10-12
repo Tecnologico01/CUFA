@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/permisos.php';validarPermiso('editar_mallas');
+require_once __DIR__.'/../../includes/cufa_fase2.php';
 
 $malla_id = $_GET['id'] ?? null;
 
@@ -25,11 +27,11 @@ die("Malla no encontrada");
 
 /* TODAS LAS MATERIAS */
 
-$materias = $pdo->query("
+$stmtMaterias = $pdo->prepare("
 SELECT id,nombre,clave,creditos,tipo
-FROM materias
+FROM materias WHERE carrera_id=?
 ORDER BY nombre
-")->fetchAll(PDO::FETCH_ASSOC);
+");$stmtMaterias->execute([$malla['carrera_id']]);$materias=$stmtMaterias->fetchAll(PDO::FETCH_ASSOC);
 
 /* MATERIAS DE LA MALLA */
 
@@ -154,9 +156,9 @@ Editor de Malla Curricular
 
 <div class="contenedor">
 
-<h2><?= htmlspecialchars($malla['carrera']) ?></h2>
+<h2><?= htmlspecialchars($malla['carrera']) ?></h2><p>Guardar agrega materias sin borrar el plan previo. Para sustituir un plan histórico crea una nueva malla.</p>
 
-<form method="POST" action="/sistema_academico/modules/admin/guardar_malla_completa.php">
+<form method="POST" action="/sistema_academico/modules/admin/guardar_malla_completa.php"><?= cufaCampoToken() ?>
 
 <input type="hidden" name="malla_id" value="<?= $malla_id ?>">
 

@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/permisos.php';validarPermiso('ver_periodos');
 
 $id = $_GET['id'] ?? null;
 $accion = $_GET['accion'] ?? 'activar';

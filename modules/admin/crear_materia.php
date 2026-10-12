@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/academico_service.php';
+if(($_SERVER['REQUEST_METHOD']??'GET')==='POST'){try{cufaValidarToken();}catch(Throwable $e){http_response_code(422);cufaError($e);return;}}
 
 /* =========================
    DATOS LOCALES
@@ -152,7 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </svg>
         </button>
 
-        <form method="POST" class="p-10">
+        <form method="POST" class="p-10"><?= cufaCampoToken() ?>
             <div class="mb-10">
                 <h2 class="text-4xl font-black italic uppercase tracking-tighter text-slate-800">Nueva Asignatura</h2>
                 <div class="h-1.5 w-24 bg-purple-600 mt-2 rounded-full"></div>

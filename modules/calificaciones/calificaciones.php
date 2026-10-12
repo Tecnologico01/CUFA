@@ -3,6 +3,7 @@ require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/permisos.php';
 
 validarPermiso('ver_calificaciones');
+require_once __DIR__.'/../../includes/calificaciones_service.php';
 
 $puedeSubir = tienePermiso('subir_calificaciones') || tienePermiso('editar_calificaciones');
 
@@ -122,6 +123,7 @@ $stmtInfo = $pdo->prepare("
         ad.id,
         ad.grupo_id,
         ad.materia_id,
+        ad.periodo_id,
         m.nombre AS materia,
         g.nombre AS grupo,
         p.nombre AS periodo
@@ -156,157 +158,22 @@ $stmtAlumnos = $pdo->prepare("
     FROM grupos_alumnos ga
     INNER JOIN alumnos a ON a.id = ga.alumno_id
     INNER JOIN usuarios u ON u.id = a.usuario_id
-    WHERE ga.grupo_id = ?
+    WHERE ga.grupo_id = ? AND ga.periodo_id = ?
     ORDER BY nombre_completo ASC
 ");
-$stmtAlumnos->execute([$info['grupo_id']]);
+$stmtAlumnos->execute([$info['grupo_id'], $info['periodo_id']]);
 $alumnos = $stmtAlumnos->fetchAll(PDO::FETCH_ASSOC);
 
 /* =========================
    UNIDADES DESDE TEMAS
 ========================= */
-$stmtUni = $pdo->prepare("
-    SELECT DISTINCT parcial
-    FROM temas_materia
-    WHERE asignacion_id = ?
-    ORDER BY parcial ASC
-");
-$stmtUni->execute([$asignacion_id]);
-$unidades = $stmtUni->fetchAll(PDO::FETCH_COLUMN);
+[, , $unidades] = cufaContexto($pdo,$asignacion_id);
 
 /* =========================
    GUARDAR FINALES
 ========================= */
-if(isset($_POST['guardar_finales'])){
-
-    if(!$puedeSubir){
-        echo "<script>alert('No tienes permiso para actualizar calificaciones.');</script>";
-    }else{
-
-        try{
-            $pdo->beginTransaction();
-
-            foreach($alumnos as $alumno){
-
-                $alumno_id = (int)$alumno['alumno_id'];
-
-                foreach($unidades as $unidad){
-
-                    $unidad = (int)$unidad;
-
-                    $stmtActs = $pdo->prepare("
-                        SELECT 
-                            act.id,
-                            act.valor,
-                            COALESCE(e.calificacion, 0) AS calificacion
-                        FROM actividades act
-                        LEFT JOIN entregas e 
-                            ON e.actividad_id = act.id 
-                            AND e.alumno_id = ?
-                        WHERE act.asignacion_id = ?
-                        AND act.parcial = ?
-                    ");
-                    $stmtActs->execute([$alumno_id, $asignacion_id, $unidad]);
-                    $actividades = $stmtActs->fetchAll(PDO::FETCH_ASSOC);
-
-                    $promedio_actividades = 0;
-
-                    foreach($actividades as $act){
-                        $valor = (float)$act['valor'];
-                        $calif = (float)$act['calificacion'];
-
-                        if($valor > 0){
-                            $promedio_actividades += ($calif * $valor) / 100;
-                        }
-                    }
-
-                    $stmtExam = $pdo->prepare("
-                        SELECT ie.calificacion
-                        FROM intentos_examen ie
-                        INNER JOIN examenes ex ON ex.id = ie.examen_id
-                        WHERE ie.alumno_id = ?
-                        AND ex.asignacion_id = ?
-                        AND ex.parcial = ?
-                        ORDER BY ie.id DESC
-                        LIMIT 1
-                    ");
-                    $stmtExam->execute([$alumno_id, $asignacion_id, $unidad]);
-                    $calificacion_examen = (float)($stmtExam->fetchColumn() ?: 0);
-
-                    $promedio_final = $promedio_actividades + ($calificacion_examen * 0.20);
-
-                    if($promedio_final > 100){
-                        $promedio_final = 100;
-                    }
-
-                    $stmtExiste = $pdo->prepare("
-                        SELECT id
-                        FROM calificaciones_finales
-                        WHERE asignacion_id = ?
-                        AND alumno_id = ?
-                        AND unidad = ?
-                        LIMIT 1
-                    ");
-                    $stmtExiste->execute([$asignacion_id, $alumno_id, $unidad]);
-                    $existe = $stmtExiste->fetchColumn();
-
-                    if($existe){
-                        $stmtUpdate = $pdo->prepare("
-                            UPDATE calificaciones_finales
-                            SET 
-                                promedio_actividades = ?,
-                                calificacion_examen = ?,
-                                calificacion_final = ?
-                            WHERE id = ?
-                        ");
-                        $stmtUpdate->execute([
-                            $promedio_actividades,
-                            $calificacion_examen,
-                            $promedio_final,
-                            $existe
-                        ]);
-                    }else{
-                        $stmtInsert = $pdo->prepare("
-                            INSERT INTO calificaciones_finales (
-                                asignacion_id,
-                                alumno_id,
-                                unidad,
-                                promedio_actividades,
-                                calificacion_examen,
-                                calificacion_final
-                            ) VALUES (?,?,?,?,?,?)
-                        ");
-                        $stmtInsert->execute([
-                            $asignacion_id,
-                            $alumno_id,
-                            $unidad,
-                            $promedio_actividades,
-                            $calificacion_examen,
-                            $promedio_final
-                        ]);
-                    }
-                }
-            }
-
-            $pdo->commit();
-
-            echo "
-            <div class='mb-6 bg-emerald-50 text-emerald-700 border border-emerald-200 p-5 rounded-2xl font-black uppercase tracking-widest'>
-                Calificaciones actualizadas correctamente.
-            </div>";
-
-        }catch(Exception $e){
-
-            if($pdo->inTransaction()){
-                $pdo->rollBack();
-            }
-
-            echo "
-            <div class='mb-6 bg-red-50 text-red-700 border border-red-200 p-5 rounded-2xl font-bold'>
-                Error: ".htmlspecialchars($e->getMessage())."
-            </div>";
-        }
-    }
+if(isset($_POST['guardar_finales'])) {
+    echo '<div class="p-5 bg-amber-50 rounded-2xl">Utiliza Capturar Manual para guardar las notas. Los valores existentes se conservan.</div>';
 }
 ?>
 
@@ -334,12 +201,7 @@ if(isset($_POST['guardar_finales'])){
             </a>
 
             <?php if($puedeSubir): ?>
-                <form method="POST">
-                    <button type="submit" name="guardar_finales"
-                            class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg">
-                        Actualizar
-                    </button>
-                </form>
+                <a href="?modulo=subir_calificaciones&asignacion_id=<?= $asignacion_id ?>" class="bg-indigo-600 text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px]">Actualizar captura</a>
             <?php endif; ?>
 
             <?php if(tienePermiso('subir_calificaciones')): ?>

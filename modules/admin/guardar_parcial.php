@@ -1,51 +1,8 @@
 <?php
-require_once __DIR__ . '/../../includes/db.php';
-
-$periodo_id = $_POST['periodo_id'] ?? null;
-$carrera_id = $_POST['carrera_id'] ?? null;
-$materia_id = $_POST['materia_id'] ?? null;
-$grupo_id = $_POST['grupo_id'] ?? null;
-$numero = $_POST['numero'] ?? null;
-
-if(!$periodo_id || !$materia_id || !$grupo_id || !$numero){
-    die("Datos incompletos");
-}
-
-/* OBTENER AÑO DESDE EL PERIODO */
-
-$stmt = $pdo->prepare("
-SELECT YEAR(fecha_inicio) as anio
-FROM periodos
-WHERE id=?
-");
-
-$stmt->execute([$periodo_id]);
-
-$periodo = $stmt->fetch(PDO::FETCH_ASSOC);
-
-if(!$periodo){
-    die("Periodo no encontrado");
-}
-
-$anio = $periodo['anio'];
-
-/* GUARDAR PARCIAL */
-
-$stmt = $pdo->prepare("
-INSERT INTO parciales
-(periodo_id,carrera_id,materia_id,grupo_id,numero,anio)
-VALUES (?,?,?,?,?,?)
-");
-
-$stmt->execute([
-$periodo_id,
-$carrera_id,
-$materia_id,
-$grupo_id,
-$numero,
-$anio
-]);
-
-header("Location: /sistema_academico/dashboards/admin_dashboard.php?modulo=parciales_lista");
-
-exit;
+require_once __DIR__.'/../../includes/db.php';require_once __DIR__.'/../../includes/academico_service.php';validarPermiso('crear_parciales');
+try{
+ if($_SERVER['REQUEST_METHOD']!=='POST')throw new RuntimeException('Utiliza el formulario.');cufaValidarToken();$periodo=cufaId($_POST,['periodo_id']);$grupo=cufaId($_POST,['grupo_id']);$materia=cufaId($_POST,['materia_id']);$numero=cufaId($_POST,['numero']);$carrera=cufaId($_POST,['carrera_id']);
+ $s=$pdo->prepare('SELECT m.total_unidades,g.carrera_id,p.fecha_inicio FROM asignaciones_docentes ad JOIN materias m ON m.id=ad.materia_id JOIN grupos g ON g.id=ad.grupo_id JOIN periodos p ON p.id=ad.periodo_id WHERE ad.materia_id=? AND ad.grupo_id=? AND ad.periodo_id=? AND g.periodo_id=p.id AND m.carrera_id=g.carrera_id');$s->execute([$materia,$grupo,$periodo]);$a=$s->fetch();if(!$a||$numero<1||$numero>(int)$a['total_unidades']||$carrera!==(int)$a['carrera_id'])throw new RuntimeException('Verifica asignación, carrera y número de parcial.');
+ $pdo->beginTransaction();$s=$pdo->prepare('SELECT id FROM asignaciones_docentes WHERE materia_id=? AND grupo_id=? AND periodo_id=? FOR UPDATE');$s->execute([$materia,$grupo,$periodo]);$s=$pdo->prepare('SELECT id FROM parciales WHERE materia_id=? AND grupo_id=? AND periodo_id=? AND numero=?');$s->execute([$materia,$grupo,$periodo,$numero]);if($s->fetchColumn())throw new RuntimeException('El parcial ya existe; no se duplicó.');
+ $pdo->prepare('INSERT INTO parciales(periodo_id,carrera_id,materia_id,grupo_id,numero,anio) VALUES(?,?,?,?,?,?)')->execute([$periodo,$carrera,$materia,$grupo,$numero,(int)substr($a['fecha_inicio'],0,4)]);$pdo->commit();header('Location: '.cufaPanel('parciales_anteriores',['carrera_id'=>$carrera,'periodo_id'=>$periodo]));exit;
+}catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();http_response_code(422);cufaError($e);}

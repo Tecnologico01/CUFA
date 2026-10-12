@@ -1,5 +1,8 @@
 <?php
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/permisos.php';validarPermiso('crear_periodos');
+require_once __DIR__.'/../../includes/academico_service.php';
+if(($_SERVER['REQUEST_METHOD']??'GET')==='POST'){try{cufaValidarToken();}catch(Throwable $e){http_response_code(422);cufaError($e);return;}}
 
 $error = '';
 $mensaje = '';
@@ -9,9 +12,8 @@ $tipos = $pdo->query("SELECT id, nombre FROM tipos_periodo")->fetchAll(PDO::FETC
 
 if($_SERVER['REQUEST_METHOD'] === 'POST'){
     $nombre = trim($_POST['nombre']);
-    $fecha_inicio = $_POST['fecha_inicio'];
-    $fecha_fin = $_POST['fecha_fin'];
-    $tipo_periodo_id = $_POST['tipo_periodo_id'];
+    try{$fecha_inicio = cufaFecha($_POST['fecha_inicio']??'');$fecha_fin = cufaFecha($_POST['fecha_fin']??'');}catch(Throwable $e){http_response_code(422);cufaError($e);return;}
+    $tipo_periodo_id = (int)($_POST['tipo_periodo_id']??0);$validTipo=$pdo->prepare('SELECT id FROM tipos_periodo WHERE id=?');$validTipo->execute([$tipo_periodo_id]);if(!$validTipo->fetchColumn()){http_response_code(422);cufaError(new RuntimeException('Tipo de periodo inválido.'));return;}
 
     if(empty($nombre)||empty($fecha_inicio)||empty($fecha_fin)||empty($tipo_periodo_id)){
         $error = "Todos los campos son obligatorios para el registro.";
@@ -102,7 +104,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
     <?php endif; ?>
 
     <!-- Formulario Principal -->
-    <form method="POST" class="bg-white rounded-[3rem] p-12 shadow-2xl shadow-slate-200/60 border border-slate-50 relative overflow-hidden">
+    <form method="POST" class="bg-white rounded-[3rem] p-12 shadow-2xl shadow-slate-200/60 border border-slate-50 relative overflow-hidden"><?= cufaCampoToken() ?>
         
         <!-- Elemento decorativo sutil -->
         <div class="absolute top-0 right-0 w-32 h-32 bg-purple-50 rounded-full -mr-16 -mt-16 opacity-50"></div>

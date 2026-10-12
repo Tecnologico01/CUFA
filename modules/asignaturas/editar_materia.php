@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/academico_service.php';
+if(($_SERVER['REQUEST_METHOD']??'GET')==='POST'){try{cufaValidarToken();}catch(Throwable $e){http_response_code(422);cufaError($e);return;}}
 require_once __DIR__ . '/../../includes/permisos.php';
 
 validarPermiso('editar_asignaturas');
@@ -129,6 +131,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
             /* =========================
                ACTUALIZAR MATERIA
             ========================= */
+            cufaBloquearCambioVinculado($pdo,'materias',$id,['nombre'=>$nombre,'carrera_id'=>$carrera_id]);
             $stmt = $pdo->prepare("
                 UPDATE materias SET
                     carrera_id = ?,
@@ -264,7 +267,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
         </div>
     </div>
 
-    <form method="POST" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <form method="POST" class="grid grid-cols-1 lg:grid-cols-3 gap-8"><?= cufaCampoToken() ?>
 
         <div class="lg:col-span-2 space-y-8">
             

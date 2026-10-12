@@ -3,6 +3,7 @@ require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/permisos.php';
 
 validarPermiso('editar_calificaciones');
+require_once __DIR__ . '/../../includes/calificaciones_service.php';
 
 $usuario_id = $_SESSION['user_id'] ?? null;
 
@@ -90,103 +91,12 @@ if(!$calificacion){
    ACTUALIZAR
 ========================= */
 if($_SERVER['REQUEST_METHOD'] === 'POST'){
-
-    $promedio_actividades = isset($_POST['promedio_actividades'])
-        ? (float) $_POST['promedio_actividades']
-        : 0;
-
-    $calificacion_examen = isset($_POST['calificacion_examen'])
-        ? (float) $_POST['calificacion_examen']
-        : 0;
-
-    $calificacion_final = isset($_POST['calificacion_final'])
-        ? (float) $_POST['calificacion_final']
-        : 0;
-
-    $observaciones = trim($_POST['observaciones'] ?? '');
-
-    $promedio_actividades = max(0, min(100, $promedio_actividades));
-    $calificacion_examen = max(0, min(100, $calificacion_examen));
-    $calificacion_final = max(0, min(100, $calificacion_final));
-
-    try{
-
-        $pdo->beginTransaction();
-
-        /*
-        |--------------------------------------------------------------------------
-        | VERIFICAR SI EXISTE COLUMNA OBSERVACIONES
-        |--------------------------------------------------------------------------
-        */
-        $stmtColumna = $pdo->prepare("
-            SHOW COLUMNS FROM calificaciones_finales LIKE 'observaciones'
-        ");
-        $stmtColumna->execute();
-        $tieneObservaciones = $stmtColumna->fetch(PDO::FETCH_ASSOC);
-
-        if($tieneObservaciones){
-
-            $stmtUpdate = $pdo->prepare("
-                UPDATE calificaciones_finales
-                SET
-                    promedio_actividades = ?,
-                    calificacion_examen = ?,
-                    calificacion_final = ?,
-                    observaciones = ?
-                WHERE id = ?
-            ");
-
-            $stmtUpdate->execute([
-                $promedio_actividades,
-                $calificacion_examen,
-                $calificacion_final,
-                $observaciones,
-                $id
-            ]);
-
-        }else{
-
-            $stmtUpdate = $pdo->prepare("
-                UPDATE calificaciones_finales
-                SET
-                    promedio_actividades = ?,
-                    calificacion_examen = ?,
-                    calificacion_final = ?
-                WHERE id = ?
-            ");
-
-            $stmtUpdate->execute([
-                $promedio_actividades,
-                $calificacion_examen,
-                $calificacion_final,
-                $id
-            ]);
-        }
-
-        $pdo->commit();
-
-        echo "
-        <script>
-            alert('Calificación actualizada correctamente');
-            window.location.href='?modulo=calificaciones&asignacion_id=".(int)$calificacion['asignacion_id']."';
-        </script>
-        ";
+    try {
+        cufaValidarToken();
+        cufaGuardar($pdo,(int)$calificacion['asignacion_id'],(int)$usuario_id,[(int)$calificacion['alumno_id']=>[(int)$calificacion['unidad']=>$_POST]],false);
+        echo '<script>alert("Calificación guardada");window.location.href="?modulo=calificaciones&asignacion_id='.(int)$calificacion['asignacion_id'].'";</script>';
         exit;
-
-    }catch(Exception $e){
-
-        if($pdo->inTransaction()){
-            $pdo->rollBack();
-        }
-
-        $msg = htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8');
-
-        echo "
-        <script>
-            alert('Error al actualizar la calificación: {$msg}');
-        </script>
-        ";
-    }
+    } catch(Throwable $e) { echo '<div class="p-6 bg-red-50 text-red-700">'.htmlspecialchars($e->getMessage()).'</div>'; }
 }
 ?>
 
@@ -241,7 +151,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
 
         </div>
 
-        <form method="POST" class="space-y-6">
+        <form method="POST" class="space-y-6"><input type="hidden" name="cufa_csrf" value="<?= htmlspecialchars(cufaToken()) ?>">
 
             <div>
                 <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
@@ -284,7 +194,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
 
                 <input
                     type="number"
-                    name="calificacion_final"
+                    name="calificacion_final" readonly
                     min="0"
                     max="100"
                     step="0.01"

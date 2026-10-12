@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/academico_service.php';
+if(($_SERVER['REQUEST_METHOD']??'GET')==='POST'){try{cufaValidarToken();}catch(Throwable $e){http_response_code(422);cufaError($e);return;}}
 require_once __DIR__ . '/../../includes/permisos.php';
 
 validarPermiso('crear_asignaturas');
@@ -223,7 +225,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </svg>
         </button>
 
-        <form method="POST" class="p-10">
+        <form method="POST" class="p-10"><?= cufaCampoToken() ?>
 
             <div class="mb-10">
                 <h2 class="text-4xl font-black italic uppercase tracking-tighter text-slate-800">

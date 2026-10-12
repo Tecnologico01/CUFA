@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/permisos.php';validarPermiso('crear_parciales');
+require_once __DIR__.'/../../includes/cufa_fase2.php';
 
 /* PERIODOS ACTIVOS */
 
@@ -34,7 +36,7 @@ Generar Parcial
 
 <div class="bg-white p-6 rounded-xl shadow max-w-xl">
 
-<form method="POST" action="/sistema_academico/modules/admin/guardar_parcial.php" class="space-y-4">
+<form method="POST" action="/sistema_academico/modules/admin/guardar_parcial.php" class="space-y-4"><?= cufaCampoToken() ?>
 
 
 <!-- PERIODO ESCOLAR -->

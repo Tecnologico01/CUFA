@@ -9,19 +9,28 @@ if (!$asignacion_id || !$unidad) {
     exit;
 }
 
+require_once __DIR__.'/../../includes/permisos.php';
+require_once __DIR__.'/../../includes/calificaciones_service.php';
+validarPermiso('ver_actividades');
+$s=$pdo->prepare('SELECT ad.id FROM asignaciones_docentes ad JOIN docentes d ON d.id=ad.docente_id WHERE ad.id=? AND d.usuario_id=?');
+$s->execute([(int)$asignacion_id,(int)($_SESSION['user_id']??0)]);
+if(!$s->fetchColumn()){http_response_code(403);exit('Asignación no autorizada.');}
+if($_SERVER['REQUEST_METHOD']==='POST') cufaValidarToken();
 /* LÓGICA DE TOGGLES (Sin cambios en la funcionalidad) */
-if(isset($_GET['toggle_act'])){
-    $id = $_GET['toggle_act'];
-    $stmt = $pdo->prepare("UPDATE actividades SET activo = NOT activo WHERE id = ?");
-    $stmt->execute([$id]);
-    header("Location: docente_dashboard.php?modulo=ver_unidad&asignacion_id=$asignacion_id&unidad=$unidad");
+if(isset($_POST['toggle_act'])){
+    validarPermiso('activar_actividades');
+    $id = (int)$_POST['toggle_act'];
+    $stmt = $pdo->prepare("UPDATE actividades SET activo = NOT activo WHERE id = ? AND asignacion_id = ? AND parcial = ?");
+    $stmt->execute([$id,$asignacion_id,$unidad]);
+    header("Location: " . BASE_URL . "dashboards/dashboard.php?modulo=ver_unidad&asignacion_id=$asignacion_id&unidad=$unidad");
     exit;
 }
 
-if(isset($_GET['toggle_exam'])){
+if(isset($_POST['toggle_exam'])){
+    validarPermiso('activar_examenes');
     $stmt = $pdo->prepare("UPDATE examenes SET activo = NOT activo WHERE asignacion_id=? AND parcial=?");
     $stmt->execute([$asignacion_id,$unidad]);
-    header("Location: docente_dashboard.php?modulo=ver_unidad&asignacion_id=$asignacion_id&unidad=$unidad");
+    header("Location: " . BASE_URL . "dashboards/dashboard.php?modulo=ver_unidad&asignacion_id=$asignacion_id&unidad=$unidad");
     exit;
 }
 
@@ -37,7 +46,8 @@ if(
 ){
 
     $entrega_id = $_POST['entrega_id'];
-    $calificacion = $_POST['calificacion'];
+    validarPermiso('calificar_entregas');
+    $calificacion = cufaNota($_POST['calificacion'] ?? '');
     $retroalimentacion = $_POST['retroalimentacion'];
 
     $stmtCalificar = $pdo->prepare("
@@ -45,16 +55,16 @@ if(
         SET
             calificacion = ?,
             retroalimentacion = ?
-        WHERE id = ?
+        WHERE id = ? AND actividad_id IN (SELECT id FROM actividades WHERE asignacion_id=? AND parcial=?)
     ");
 
     $stmtCalificar->execute([
         $calificacion,
         $retroalimentacion,
-        $entrega_id
+        $entrega_id, $asignacion_id, $unidad
     ]);
 
-    header("Location: docente_dashboard.php?modulo=ver_unidad&asignacion_id=$asignacion_id&unidad=$unidad");
+    header("Location: " . BASE_URL . "dashboards/dashboard.php?modulo=ver_unidad&asignacion_id=$asignacion_id&unidad=$unidad");
 
     exit;
 }
@@ -189,8 +199,7 @@ if($examen){
 
                             <?php if(!empty($s['act_id'])): ?>
 
-                                <a href="?modulo=ver_unidad&asignacion_id=<?= $asignacion_id ?>&unidad=<?= $unidad ?>&toggle_act=<?= $s['act_id'] ?>"
-                                   class="flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
+                                <form method="POST" class="inline"><input type="hidden" name="cufa_csrf" value="<?= htmlspecialchars(cufaToken()) ?>"><button type="submit" name="toggle_act" value="<?= $s['act_id'] ?>" class="flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
                                    <?= $s['activo']
                                         ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
                                         : 'bg-slate-100 text-slate-400 border border-slate-200' ?>">
@@ -201,7 +210,7 @@ if($examen){
 
                                     <?= $s['activo'] ? 'Visible' : 'Oculto' ?>
 
-                                </a>
+                                </button></form>
 
                             <?php endif; ?>
 
@@ -368,7 +377,7 @@ if($examen){
                                                         <?php else: ?>
 
                                                             <form method="POST"
-                                                                  class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                                                                  class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3"><input type="hidden" name="cufa_csrf" value="<?= htmlspecialchars(cufaToken()) ?>">
 
                                                                 <input type="hidden"
                                                                        name="entrega_id"
@@ -479,8 +488,7 @@ if($examen){
 
                         <?php if($examen): ?>
 
-                            <a href="?modulo=ver_unidad&asignacion_id=<?= $asignacion_id ?>&unidad=<?= $unidad ?>&toggle_exam=1"
-                               class="p-2 rounded-xl transition-colors
+                            <form method="POST" class="inline"><input type="hidden" name="cufa_csrf" value="<?= htmlspecialchars(cufaToken()) ?>"><button type="submit" name="toggle_exam" value="1" class="p-2 rounded-xl transition-colors
                                <?= $examen['activo']
                                     ? 'text-emerald-400 hover:bg-emerald-400/10'
                                     : 'text-slate-500 hover:bg-slate-500/10' ?>">
@@ -502,7 +510,7 @@ if($examen){
 
                                 </svg>
 
-                            </a>
+                            </button></form>
 
                         <?php endif; ?>
 

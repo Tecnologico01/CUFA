@@ -1,5 +1,8 @@
 <?php
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/permisos.php';validarPermiso('crear_mallas');
+require_once __DIR__.'/../../includes/academico_service.php';
+if(($_SERVER['REQUEST_METHOD']??'GET')==='POST'){try{cufaValidarToken();}catch(Throwable $e){http_response_code(422);cufaError($e);return;}}
 
 if($_SERVER["REQUEST_METHOD"] === "POST"){
 
@@ -7,6 +10,10 @@ $carrera_id = $_POST['carrera_id'];
 $tipo_periodo_id = $_POST['tipo_periodo_id'];
 $total_periodos = $_POST['total_periodos'];
 
+try{
+if(!ctype_digit((string)$total_periodos)||(int)$total_periodos<1||(int)$total_periodos>30)throw new RuntimeException('La malla requiere de 1 a 30 periodos.');
+$check=$pdo->prepare('SELECT id FROM carreras WHERE id=?');$check->execute([(int)$carrera_id]);if(!$check->fetchColumn())throw new RuntimeException('Carrera inválida.');
+$check=$pdo->prepare('SELECT id FROM tipos_periodo WHERE id=?');$check->execute([(int)$tipo_periodo_id]);if(!$check->fetchColumn())throw new RuntimeException('Tipo de periodo inválido.');
 $stmt = $pdo->prepare("
 INSERT INTO mallas_curriculares
 (carrera_id,tipo_periodo_id,total_periodos)
@@ -23,6 +30,7 @@ $malla_id = $pdo->lastInsertId();
 
 header("Location: /sistema_academico/dashboards/admin_dashboard.php?modulo=editar_malla&id=".$malla_id);
 exit;
+}catch(Throwable $e){http_response_code(422);cufaError($e);}
 
 }
 
@@ -41,7 +49,7 @@ Crear Malla Curricular
 
 <div class="bg-white p-6 rounded-xl shadow max-w-xl">
 
-<form method="POST" class="space-y-4">
+<form method="POST" class="space-y-4"><?= cufaCampoToken() ?>
 
 <div>
 <label class="font-semibold">Carrera</label>

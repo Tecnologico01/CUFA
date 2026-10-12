@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/permisos.php';validarPermiso('editar_periodos');
+require_once __DIR__.'/../../includes/cufa_fase2.php';
 
 $id = $_GET['id'] ?? null;
 
@@ -60,7 +62,7 @@ $tipos = $pdo->query("SELECT * FROM tipos_periodo")->fetchAll(PDO::FETCH_ASSOC);
             <!-- Decoración sutil -->
             <div class="absolute top-0 right-0 w-32 h-32 bg-purple-50 rounded-full -mr-16 -mt-16 opacity-50"></div>
 
-            <form method="POST" action="/sistema_academico/modules/admin/guardar_periodo.php" class="relative z-10">
+            <form method="POST" action="/sistema_academico/modules/admin/guardar_periodo.php" class="relative z-10"><?= cufaCampoToken() ?>
 
                 <input type="hidden" name="id" value="<?= $periodo['id'] ?>">
 

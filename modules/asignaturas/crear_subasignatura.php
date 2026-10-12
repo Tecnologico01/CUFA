@@ -1,6 +1,8 @@
 <?php
 
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/academico_service.php';
+if(($_SERVER['REQUEST_METHOD']??'GET')==='POST'){try{cufaValidarToken();}catch(Throwable $e){http_response_code(422);cufaError($e);return;}}
 require_once __DIR__ . '/../../includes/permisos.php';
 
 validarPermiso('crear_subasignaturas');
@@ -121,7 +123,7 @@ $subasignaturas = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <span class="text-[70px] font-black text-slate-50 italic leading-none uppercase">Nuevo</span>
         </div>
 
-        <form method="POST" class="relative z-10 grid grid-cols-1 md:grid-cols-12 gap-8">
+        <form method="POST" class="relative z-10 grid grid-cols-1 md:grid-cols-12 gap-8"><?= cufaCampoToken() ?>
 
             <div class="md:col-span-3">
                 <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Clave</label>

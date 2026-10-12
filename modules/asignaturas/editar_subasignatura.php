@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/academico_service.php';
+if(($_SERVER['REQUEST_METHOD']??'GET')==='POST'){try{cufaValidarToken();}catch(Throwable $e){http_response_code(422);cufaError($e);return;}}
 require_once __DIR__ . '/../../includes/permisos.php';
 
 validarPermiso('editar_subasignaturas');
@@ -191,7 +193,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
         </div>
     <?php endif; ?>
 
-    <form method="POST" class="bg-white p-12 rounded-[3.5rem] shadow-sm border border-slate-100 relative overflow-hidden">
+    <form method="POST" class="bg-white p-12 rounded-[3.5rem] shadow-sm border border-slate-100 relative overflow-hidden"><?= cufaCampoToken() ?>
         
         <div class="absolute top-0 right-0 p-10 opacity-[0.03] select-none pointer-events-none">
             <span class="text-9xl font-black italic uppercase tracking-tighter">Edit</span>
