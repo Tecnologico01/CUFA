@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/cufa_fase2.php';
 require_once __DIR__ . '/../../includes/permisos.php';
 
 validarPermiso('ver_asignaciones_alumnos');
@@ -14,27 +15,7 @@ $grupo_id   = isset($_GET['grupo_id']) ? (int) $_GET['grupo_id'] : 0;
    REMOVER ASIGNACIÓN
 ========================= */
 
-if(isset($_GET['eliminar'])){
-
-    if(!$puedeRemover){
-        die("Sin permisos");
-    }
-
-    $ga_id = (int) $_GET['eliminar'];
-
-    if($ga_id > 0){
-
-        $stmt = $pdo->prepare("
-            DELETE FROM grupos_alumnos
-            WHERE id = ?
-        ");
-
-        $stmt->execute([$ga_id]);
-    }
-
-    header("Location: ?modulo=ver_asignaciones_alumnos&carrera_id={$carrera_id}&grupo_id={$grupo_id}");
-    exit;
-}
+if(isset($_GET['eliminar'])){echo '<div class="p-6 bg-yellow-50">Se conservó la inscripción. La baja de un alumno requiere un procedimiento institucional que preserve su historial.</div>';}
 
 /* =========================
    CARRERAS
@@ -146,7 +127,7 @@ if($grupo_id > 0){
 
     <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-8 mb-8">
 
-        <form method="GET" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <form method="GET" class="grid grid-cols-1 md:grid-cols-3 gap-6"><?= cufaCampoToken() ?>
 
             <input type="hidden" name="modulo" value="ver_asignaciones_alumnos">
 

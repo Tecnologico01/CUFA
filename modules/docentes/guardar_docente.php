@@ -371,7 +371,7 @@ try{
 
     $pdo->commit();
 
-    header("Location: ?modulo=ver_docente&id=" . $id . "&ok=1");
+    header("Location: ?modulo=detalle_docente&id=" . $id . "&ok=1");
     exit;
 
 }catch(Exception $e){

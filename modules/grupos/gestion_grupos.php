@@ -1,6 +1,8 @@
 <?php
 
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/academico_service.php';
+if(($_SERVER['REQUEST_METHOD']??'GET')==='POST'){try{cufaValidarToken();}catch(Throwable $e){http_response_code(422);cufaError($e);return;}}
 require_once __DIR__ . '/../../includes/permisos.php';
 
 validarPermiso('crear_grupos');
@@ -192,7 +194,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <?php endif; ?>
 
-            <form method="POST" class="space-y-6">
+            <form method="POST" class="space-y-6"><?= cufaCampoToken() ?>
 
                 <div>
 

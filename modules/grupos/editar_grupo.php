@@ -1,6 +1,8 @@
 <?php
 
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/academico_service.php';
+if(($_SERVER['REQUEST_METHOD']??'GET')==='POST'){try{cufaValidarToken();}catch(Throwable $e){http_response_code(422);cufaError($e);return;}}
 require_once __DIR__ . '/../../includes/permisos.php';
 
 validarPermiso('editar_grupos');
@@ -72,6 +74,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
 
         try{
 
+            cufaBloquearCambioVinculado($pdo,'grupos',$id,['nombre'=>$nombre,'carrera_id'=>$carrera_id,'periodo_id'=>$periodo_id,'grado'=>$grado]);
             /* VALIDAR CARRERA */
 
             $stmt = $pdo->prepare("
@@ -218,7 +221,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
 
         <div class="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-full -mr-16 -mt-16 opacity-50"></div>
 
-        <form method="POST" class="relative z-10 space-y-8">
+        <form method="POST" class="relative z-10 space-y-8"><?= cufaCampoToken() ?>
 
             <div>
                 <label class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2 mb-3 block">

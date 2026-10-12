@@ -9,7 +9,7 @@ require_once __DIR__ . '/../../includes/permisos.php';
 |--------------------------------------------------------------------------
 */
 
-validarPermiso('ver_grupos');
+if(!tienePermiso('ver_grupos') && !tienePermiso('asignar_materias')){http_response_code(403);header('Content-Type: application/json; charset=utf-8');echo json_encode(['success'=>false,'data'=>[],'message'=>'Sin permiso para consultar grupos']);exit;}
 
 /*
 |--------------------------------------------------------------------------

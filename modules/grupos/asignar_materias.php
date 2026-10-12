@@ -1,6 +1,8 @@
 <?php
 
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/academico_service.php';
+if(($_SERVER['REQUEST_METHOD']??'GET')==='POST'){try{cufaValidarToken();}catch(Throwable $e){http_response_code(422);cufaError($e);return;}}
 require_once __DIR__ . '/../../includes/permisos.php';
 
 validarPermiso('asignar_materias');
@@ -377,7 +379,7 @@ if($periodo_id > 0){
 
         <div class="w-full md:w-72">
 
-            <form method="GET" id="formPeriodo">
+            <form method="GET" id="formPeriodo"><?= cufaCampoToken() ?>
 
                 <input type="hidden" name="modulo" value="asignar_materias">
 
@@ -453,7 +455,7 @@ if($periodo_id > 0){
                         </h3>
                     </div>
 
-                    <form method="POST" class="space-y-6">
+                    <form method="POST" class="space-y-6"><?= cufaCampoToken() ?>
 
                         <input type="hidden" name="periodo_id" value="<?= $periodo_id ?>">
 
@@ -698,7 +700,7 @@ if(materiaSelect){
 
         select.innerHTML = "<option value=''>Procesando grupos...</option>";
 
-        fetch(`?modulo=get_grupos_por_carrera&carrera_id=${carrera_id}&periodo_id=${periodo_id}`)
+        fetch(<?= json_encode(BASE_URL."modules/grupos/get_grupos_por_carrera.php") ?>+`?carrera_id=${carrera_id}&periodo_id=${periodo_id}`)
             .then(res => res.json())
             .then(response => {
 

@@ -1,6 +1,8 @@
 <?php
 
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__.'/../../includes/academico_service.php';
+if(($_SERVER['REQUEST_METHOD']??'GET')==='POST'){try{cufaValidarToken();}catch(Throwable $e){http_response_code(422);cufaError($e);return;}}
 require_once __DIR__ . '/../../includes/permisos.php';
 
 validarPermiso('asignar_alumnos');
@@ -58,19 +60,6 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
                 throw new Exception("El grupo no pertenece al periodo seleccionado.");
             }
 
-            /* LIMPIAR ASIGNACIONES ANTERIORES DEL GRUPO */
-
-            $stmtDelete = $pdo->prepare("
-                DELETE FROM grupos_alumnos
-                WHERE grupo_id = ?
-                AND periodo_id = ?
-            ");
-
-            $stmtDelete->execute([
-                $grupo_id,
-                $periodo_id
-            ]);
-
             /* INSERTAR NUEVAS ASIGNACIONES */
 
             if(!empty($alumnos)){
@@ -121,7 +110,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
                     ]);
 
                     if(!$stmtAlumno->fetch()){
-                        continue;
+                        throw new RuntimeException('Alumno incompatible con la carrera o grado del grupo.');
                     }
 
                     /* VALIDAR SI YA ESTÁ ASIGNADO A OTRO GRUPO EN EL MISMO PERIODO */
@@ -147,7 +136,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
 
             $mensaje = [
                 "tipo" => "success",
-                "texto" => "Alumnos asignados correctamente."
+                "texto" => "Alumnos agregados. Las inscripciones anteriores se conservaron."
             ];
 
         }catch(Exception $e){
@@ -306,7 +295,7 @@ if($grupo_id > 0 && $periodo_id > 0){
 
     <div class="bg-white rounded-[2rem] p-8 border border-slate-100 shadow-sm mb-8">
 
-        <form method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <form method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-6"><?= cufaCampoToken() ?>
 
             <input type="hidden" name="modulo" value="asignar_alumnos">
 
@@ -396,7 +385,7 @@ if($grupo_id > 0 && $periodo_id > 0){
 
     <?php if($grupo_id > 0): ?>
 
-        <form method="POST">
+        <form method="POST"><?= cufaCampoToken() ?>
 
             <input type="hidden" name="grupo_id" value="<?= $grupo_id ?>">
             <input type="hidden" name="periodo_id" value="<?= $periodo_id ?>">

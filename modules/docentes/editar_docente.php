@@ -106,7 +106,7 @@ function verDoc($tipo, $documentos){
             </p>
         </div>
 
-        <a href="?modulo=ver_docente&id=<?= $id ?>"
+        <a href="?modulo=detalle_docente&id=<?= $id ?>"
            class="inline-flex items-center text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors">
             Volver al expediente
         </a>
