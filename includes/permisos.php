@@ -30,6 +30,7 @@ function tienePermiso($permiso){
 
         WHERE u.id = ?
         AND p.slug = ?
+        AND u.activo = 1
     ");
 
     $stmt->execute([
@@ -46,6 +47,7 @@ function tienePermiso($permiso){
 function validarPermiso($permiso){
 
     if(!tienePermiso($permiso)){
+        http_response_code(403);
 
         echo "
         <div style='padding:30px;font-family:sans-serif'>

@@ -1,4 +1,5 @@
 <?php
+ob_start();
 session_start();
 
 require_once __DIR__ . '/../includes/db.php';
@@ -9,9 +10,36 @@ if(!isset($_SESSION['user_id'])){
     exit;
 }
 
+$sesion=$pdo->prepare('SELECT u.nombres,r.slug,u.rol_id FROM usuarios u JOIN roles r ON r.id=u.rol_id WHERE u.id=? AND u.activo=1');
+$sesion->execute([(int)$_SESSION['user_id']]);$cuenta=$sesion->fetch();
+if(!$cuenta){session_destroy();header('Location: '.BASE_URL.'index.php');exit;}
+$_SESSION['nombres']=$cuenta['nombres'];$_SESSION['rol_slug']=$cuenta['slug'];$_SESSION['rol_id']=$cuenta['rol_id'];
 $nombre = $_SESSION['nombres'] ?? 'Usuario';
 $rol_slug = $_SESSION['rol_slug'] ?? '';
-$modulo = $_GET['modulo'] ?? 'inicio';
+$modulo = is_string($_GET['modulo'] ?? null) ? $_GET['modulo'] : 'inicio';
+// Los endpoints AJAX deben responder antes de generar el panel HTML.
+if ($modulo === 'get_grupos_por_carrera') {
+    require __DIR__.'/../modules/grupos/get_grupos_por_carrera.php';
+    exit;
+}
+
+
+$modulosPadre = [
+    'padre_panel',
+    'padre_inicio',
+    'padre_calificaciones',
+    'padre_asistencia',
+    'padre_actividades',
+    'padre_alumno'
+];
+
+if (
+    str_starts_with($modulo, 'padre_') &&
+    ($_SESSION['rol_slug'] ?? '') !== 'padre'
+) {
+    header('Location: dashboard.php');
+    exit;
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -39,6 +67,11 @@ function esAlumno(){
     return in_array($rol_slug, ['alumno', 'estudiante']);
 }
 
+function esPadre(){
+    global $rol_slug;
+    return in_array($rol_slug, ['padre']);
+}
+
 function esControlEscolar(){
     global $rol_slug;
     return in_array($rol_slug, ['control_escolar']);
@@ -51,6 +84,27 @@ function esControlEscolar(){
 */
 
 $modulos = [
+ 'carreras'=>['archivo'=>'modules/admin/carreras.php','permiso'=>'ver_carreras'],
+ 'eliminar_carrera'=>['archivo'=>'modules/admin/eliminar_carrera.php','permiso'=>'eliminar_carreras'],
+    'periodos_lista'=>['archivo'=>'modules/admin/periodos_lista.php','permiso'=>'ver_periodos'],
+    'crear_periodo'=>['archivo'=>'modules/admin/crear_periodo.php','permiso'=>'crear_periodos'],
+    'editar_periodo'=>['archivo'=>'modules/admin/editar_periodo.php','permiso'=>'editar_periodos'],
+    'guardar_periodo'=>['archivo'=>'modules/admin/guardar_periodo.php','permiso'=>'editar_periodos'],
+    'eliminar_periodo'=>['archivo'=>'modules/admin/eliminar_periodo.php','permiso'=>'eliminar_periodos'],
+    'crear_malla'=>['archivo'=>'modules/admin/crear_malla.php','permiso'=>'crear_mallas'],
+    'editar_malla'=>['archivo'=>'modules/admin/editar_malla.php','permiso'=>'editar_mallas'],
+    'eliminar_malla'=>['archivo'=>'modules/admin/eliminar_malla.php','permiso'=>'eliminar_mallas'],
+    'guardar_materia_malla'=>['archivo'=>'modules/admin/guardar_materia_malla.php','permiso'=>'editar_mallas'],
+    'guardar_malla_completa'=>['archivo'=>'modules/admin/guardar_malla_completa.php','permiso'=>'editar_mallas'],
+    'guardar_parcial'=>['archivo'=>'modules/admin/guardar_parcial.php','permiso'=>'crear_parciales'],
+    'generar_parciales'=>['archivo'=>'modules/admin/generar_parciales.php','permiso'=>'crear_parciales'],
+    'parciales_activos'=>['archivo'=>'modules/admin/parciales_activos.php','permiso'=>'ver_parciales'],
+    'parciales_anteriores'=>['archivo'=>'modules/admin/parciales_anteriores.php','permiso'=>'ver_parciales'],
+    'periodo_activo'=>['archivo'=>'modules/admin/periodo_activo.php','permiso'=>'ver_periodos'],
+    'ver_planeaciones'=>['archivo'=>'modules/planeaciones/listado_planeaciones.php','permiso'=>'ver_planeaciones'],
+    'revisar_planeaciones'=>['archivo'=>'modules/planeaciones/listado_planeaciones.php','permiso'=>'revisar_planeaciones'],
+    'detalle_planeacion'=>['archivo'=>'modules/planeaciones/detalle_planeacion.php','permiso'=>'ver_planeaciones'],
+
 
     /*
     |--------------------------------------------------------------------------
@@ -146,6 +200,22 @@ $modulos = [
 
     /*
     |--------------------------------------------------------------------------
+    | ALUMNOS
+    |--------------------------------------------------------------------------
+    */
+
+    'alumnos' => [
+        'archivo' => 'modules/alumnos/alumnos_lista.php',
+        'permiso' => 'ver_alumnos'
+    ],
+
+    'detalle_alumno' => [
+        'archivo' => 'modules/alumnos/detalle_alumno.php',
+        'permiso' => 'ver_alumnos'
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | GRUPOS
     |--------------------------------------------------------------------------
     */
@@ -190,6 +260,11 @@ $modulos = [
         'permiso' => 'ver_asignaciones_alumnos'
     ],
 
+    'detalle_grupo' => [
+        'archivo' => 'modules/grupos/detalle_grupo.php',
+        'permiso' => 'ver_detalle_grupo'
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | DOCENTES
@@ -206,7 +281,7 @@ $modulos = [
         'permiso' => 'crear_docentes'
     ],
 
-    'ver_docente' => [
+    'detalle_docente' => [
         'archivo' => 'modules/docentes/detalle_docente.php',
         'permiso' => 'ver_detalle_docente'
     ],
@@ -354,15 +429,6 @@ $modulos = [
         'permiso' => 'habilitar_actas'
     ],
 
-    'mis_examenes_alumnos' => [
-        'archivo' => 'modules/examenes/mis_examenes_alumnos.php',
-        'permiso' => 'ver_examenes'
-    ],
-
-    'habilitar_actas' => [
-        'archivo' => 'modules/calificaciones/habilitar_actas.php',
-        'permiso' => 'habilitar_actas'
-    ],
 
     /*
     |--------------------------------------------------------------------------
@@ -385,6 +451,7 @@ $modulos = [
         'permiso' => 'ver_actas'
     ],
 
+    'ver_boleta' => ['archivo' => 'modules/control_escolar/ver_boleta.php', 'permiso' => 'ver_boletas'],
     'boletas' => [
         'archivo' => 'modules/control_escolar/boletas.php',
         'permiso' => 'ver_boletas'
@@ -424,6 +491,82 @@ $modulos = [
     'gestionar_permisos' => [
         'archivo' => 'modules/permisos/gestionar_permisos.php',
         'permiso' => 'gestionar_permisos'
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | PORTAL DEL ALUMNO
+    |--------------------------------------------------------------------------
+    */
+
+    'mis_actividades_alumno' => [
+        'archivo' => 'modules/alumno/mis_actividades_alumno.php',
+        'permiso' => null
+    ],
+
+    'mis_examenes_alumnos' => [
+        'archivo' => 'modules/alumno/mis_examenes_alumnos.php',
+        'permiso' => null
+    ],
+
+    // Rutas del portal del alumno. Se conservan los nombres anteriores
+    // y se agregan alias porque los enlaces internos usan modulo=examen y modulo=tareas.
+    'examen_alumno' => [
+        'archivo' => 'modules/alumno/examen.php',
+        'permiso' => null
+    ],
+
+    'examen' => [
+        'archivo' => 'modules/alumno/examen.php',
+        'permiso' => null
+    ],
+
+    'tareas_alumno' => [
+        'archivo' => 'modules/alumno/tareas.php',
+        'permiso' => null
+    ],
+
+    'tareas' => [
+        'archivo' => 'modules/alumno/tareas.php',
+        'permiso' => null
+    ],
+
+    // Mis calificaciones del alumno se atiende con el módulo existente de
+    // calificaciones. El propio módulo debe distinguir el rol alumno/docente.
+    'mis_calificaciones' => [
+        'archivo' => 'modules/alumno/mis_calificaciones.php',
+        'permiso' => null
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | PADRES DE FAMILIA
+    |--------------------------------------------------------------------------
+    */
+
+    'padre_inicio' => [
+        'archivo' => 'modules/padre/inicio.php',
+        'permiso' => null
+    ],
+
+    'padre_calificaciones' => [
+        'archivo' => 'modules/padre/calificaciones.php',
+        'permiso' => null
+    ],
+
+    'padre_asistencia' => [
+        'archivo' => 'modules/padre/asistencia.php',
+        'permiso' => null
+    ],
+
+    'padre_actividades' => [
+        'archivo' => 'modules/padre/actividades.php',
+        'permiso' => null
+    ],
+
+    'padre_alumno' => [
+        'archivo' => 'modules/padre/perfil_alumno.php',
+        'permiso' => null
     ],
 ];
 
@@ -465,7 +608,9 @@ $menu = [
 
 function puedeVerSeccion($items){
     foreach($items as $item){
-        if(tienePermiso($item['permiso'])){
+        $permiso = $item['permiso'] ?? null;
+
+        if($permiso === null || tienePermiso($permiso)){
             return true;
         }
     }
@@ -481,6 +626,7 @@ function panelTitulo($modulo){
         'docentes_panel' => 'Gestión Docente',
         'docente_panel' => 'Mi Aula',
         'alumno_panel' => 'Portal Estudiantil',
+        'padre_panel' => 'Portal de Padres de Familia',
         'planeaciones_panel' => 'Planeaciones',
         'control_escolar_panel' => 'Control Escolar',
         'permisos_panel' => 'Seguridad y Permisos',
@@ -677,6 +823,15 @@ function panelTitulo($modulo){
                     <a href="?modulo=alumno_panel"
                        class="nav-link <?= $modulo === 'alumno_panel' ? 'active' : '' ?>">
                         Portal Estudiantil
+                    </a>
+
+                <?php endif; ?>
+
+                <?php if(esPadre()): ?>
+
+                    <a href="?modulo=padre_panel"
+                    class="nav-link <?= str_starts_with($modulo, 'padre_') ? 'active' : '' ?>">
+                        Seguimiento
                     </a>
 
                 <?php endif; ?>
@@ -883,7 +1038,10 @@ function panelTitulo($modulo){
                         <a href="?modulo=crear_subasignatura" class="action-card">Crear subasignatura</a>
                     <?php endif; ?>
 
-                    <?php if(tienePermiso('ver_mallas')): ?>
+                    <?php if(tienePermiso('ver_carreras')): ?><a href="?modulo=carreras" class="action-card">Carreras</a><?php endif; ?>
+<?php if(tienePermiso('ver_periodos')): ?><a href="?modulo=periodos_lista" class="action-card">Periodos académicos</a><?php endif; ?>
+<?php if(tienePermiso('ver_parciales')): ?><a href="?modulo=parciales_activos" class="action-card">Parciales activos</a><a href="?modulo=parciales_anteriores" class="action-card">Historial de parciales</a><?php endif; ?>
+<?php if(tienePermiso('ver_mallas')): ?>
                         <a href="?modulo=ver_mallas" class="action-card">Malla curricular</a>
                     <?php endif; ?>
                 </div>
@@ -1012,6 +1170,25 @@ function panelTitulo($modulo){
 
     </section>
 
+<?php elseif($modulo === 'padre_panel'): ?>
+
+    <section class="bg-white rounded-3xl shadow-xl shadow-purple-100/30 border border-purple-50 p-8">
+        <h2 class="text-xl font-bold mb-6 text-purple-900 border-b border-purple-50 pb-4">
+            Portal de Padres de Familia
+        </h2>
+
+        <p class="text-slate-500 mb-7">
+            Consulta y da seguimiento al desempeño académico de tu hijo o alumno asociado.
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <a href="?modulo=padre_alumno" class="action-card">Información del alumno</a>
+            <a href="?modulo=padre_calificaciones" class="action-card">Calificaciones</a>
+            <a href="?modulo=padre_asistencia" class="action-card">Asistencia</a>
+            <a href="?modulo=padre_actividades" class="action-card">Actividades</a>
+        </div>
+    </section>
+
 <?php elseif($modulo === 'planeaciones_panel'): ?>
 
     <section class="bg-white rounded-3xl shadow-xl shadow-amber-100/30 border border-amber-50 p-8">
@@ -1028,7 +1205,7 @@ function panelTitulo($modulo){
             <?php endif; ?>
 
             <?php if(!esDocente() && tienePermiso('ver_planeaciones')): ?>
-                <a href="?modulo=planeacion_materia" class="action-card">Ver planeaciones</a>
+                <a href="?modulo=ver_planeaciones" class="action-card">Ver planeaciones</a>
             <?php endif; ?>
 
             <?php if(tienePermiso('revisar_planeaciones')): ?>
@@ -1128,7 +1305,8 @@ function panelTitulo($modulo){
         $archivo = __DIR__ . '/../' . $modulos[$modulo]['archivo'];
         $permiso = $modulos[$modulo]['permiso'];
 
-        if(!tienePermiso($permiso)){
+        if($permiso !== null && !tienePermiso($permiso)){
+            http_response_code(403);
 
             echo "
             <div class='bg-red-50 border-l-4 border-red-500 text-red-700 p-8 rounded-2xl shadow-sm'>
@@ -1160,6 +1338,8 @@ function panelTitulo($modulo){
 
         }else{
 
+            require_once __DIR__.'/../includes/seguridad_academica.php';
+            cufaAutorizarRecurso($pdo,$modulos[$modulo]['archivo']);
             include $archivo;
         }
     }
