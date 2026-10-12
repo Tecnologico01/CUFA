@@ -48,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
 
-    require_once 'includes/db.php';
+    require_once __DIR__.'/includes/db.php';
 
     $stmt = $pdo->prepare("
         SELECT 
@@ -71,6 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user = $stmt->fetch();
 
     if ($user && password_verify($password, $user['password_hash'])) {
+        session_regenerate_id(true);
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['nombres'] = $user['nombres'];
         $_SESSION['rol_id'] = $user['rol_id'];
